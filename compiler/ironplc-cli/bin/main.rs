@@ -686,6 +686,13 @@ enum Action {
         #[arg(long, value_name = "HASH", value_parser = parse_content_hash)]
         device_content_hash: Option<[u8; HASH_LEN]>,
 
+        /// Keep a copy of the container that was sent beside the record, as
+        /// `<application>.<device-id>.download.iplc`: the bytes the device
+        /// received. The editor passes it for a download that replaced the
+        /// application.
+        #[arg(long)]
+        keep_container: bool,
+
         /// Generation of the artifact that was executing, as the device
         /// reported it after the download. Given together with `--normal` and
         /// `--application`.
@@ -876,6 +883,7 @@ fn execute(action: Action) -> Result<(), String> {
             device_id,
             container,
             device_content_hash,
+            keep_container,
             active,
             normal,
             application_generation,
@@ -884,6 +892,7 @@ fn execute(action: Action) -> Result<(), String> {
             container: container.as_deref(),
             device_id: &device_id,
             device_content_hash,
+            keep_container,
             device: match (active, normal, application_generation) {
                 (Some(active), Some(normal), Some(application)) => Some(DeviceGenerations {
                     active,

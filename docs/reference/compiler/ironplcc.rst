@@ -156,7 +156,9 @@ Download Record Commands
    container does not exist or does not start with a valid container header, and
    when ``--device-content-hash`` is not the
    content hash of the container. An *ID* that is not 32 lowercase hexadecimal
-   digits is refused before anything is written.
+   digits is refused before anything is written. With ``--keep-container`` the
+   command also keeps a copy of the container that was sent, as
+   :file:`{STEM}.{ID}.download.iplc` beside the record.
 
 :program:`ironplcc record-download-path` *APPLICATION* ``--device-id`` *ID*
    Print the path of the download record of the device for *APPLICATION*,
@@ -257,6 +259,12 @@ Options
    The content hash that the device reports, as 64 hexadecimal digits. Applies
    to ``record-download``. The record says what the device received, so the
    command writes it only when *HASH* is the content hash of the container.
+
+``--keep-container``
+   Keep a copy of the container that was sent beside the download record, as
+   :file:`{STEM}.{ID}.download.iplc`: the bytes the device received. Applies to
+   ``record-download``. The editor passes it when a download replaced the
+   application.
 
 ``--active`` *N*, ``--normal`` *N*, ``--application`` *N*
    The generation counters of the device after the download: of the artifact

@@ -40,6 +40,7 @@ fn args<'a>(application: &'a PathBuf, device_id: &'a DeviceId) -> RecordDownload
         device_id,
         device_content_hash: None,
         device: None,
+        keep_container: false,
     }
 }
 
@@ -53,6 +54,19 @@ fn record_download_when_container_then_ok_and_record_beside_it() {
         .path()
         .join(format!("app.{DEVICE_TEXT}.download.iplcinfo"))
         .is_file());
+}
+
+#[test]
+fn record_download_when_keep_container_then_copy_beside_the_record() {
+    let (dir, application) = application();
+    let id = device();
+    let mut request = args(&application, &id);
+    request.keep_container = true;
+
+    record_download(&request).unwrap();
+
+    let kept = dir.path().join(format!("app.{DEVICE_TEXT}.download.iplc"));
+    assert_eq!(fs::read(kept).unwrap(), fs::read(&application).unwrap());
 }
 
 #[test]
