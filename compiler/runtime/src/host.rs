@@ -26,8 +26,8 @@
 //! fresh and initialized by the candidate's init image, then the migration
 //! plan copies the values of the entities both containers share. A migration candidate
 //! has no untest path: writes made under the candidate's layout have no
-//! reverse mapping for added or removed variables, so it can only be
-//! assembled or discarded while the original is active.
+//! reverse mapping for added or removed variables, so once it executes it can
+//! only be assembled (cancel would be a revert, which is refused as well).
 //!
 //! `run` never holds a [`VmRunning`](ironplc_vm::VmRunning) borrow across a
 //! mutation of the host fields: the VM borrows the active container and the
@@ -370,7 +370,7 @@ impl RuntimeHost {
     /// A migration candidate has no revert path: its buffers were rebuilt
     /// under a new layout, so `untest` is refused with
     /// [`OnlineChangeError::UntestUnsupported`] and the state is left
-    /// unchanged. Assemble or cancel while the original is active instead.
+    /// unchanged. Assemble instead.
     pub fn untest(&mut self) -> Result<(), OnlineChangeError> {
         self.guard(EditCommand::Untest)?;
         self.pending = Some(PendingSwap::Untest);

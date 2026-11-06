@@ -69,7 +69,7 @@ fn expected(state: State) -> [Result<(), OnlineChangeError>; 5] {
             Err(NotAllowedInThisMode),
             Err(UntestUnsupported),
             OK,
-            Err(NotAllowedInThisMode),
+            Err(UntestUnsupported),
         ],
         State::TestPending | State::TestPendingMigration => [
             Err(CandidateAlreadyStaged),

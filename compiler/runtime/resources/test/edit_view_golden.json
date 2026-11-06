@@ -247,8 +247,8 @@
           "enabled": false,
           "label": "Cancel",
           "reason": {
-            "code": "V4015",
-            "text": "operation not allowed in the current hot-edit phase"
+            "code": "V4011",
+            "text": "untest and cancel are not supported after a schema-changing test; assemble instead"
           }
         },
         "finalizeAll": {
@@ -277,7 +277,7 @@
           "label": "Untest",
           "reason": {
             "code": "V4011",
-            "text": "untest is not supported after a schema-changing test; assemble or cancel instead"
+            "text": "untest and cancel are not supported after a schema-changing test; assemble instead"
           }
         }
       },

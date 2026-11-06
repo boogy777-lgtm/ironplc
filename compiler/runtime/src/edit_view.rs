@@ -278,6 +278,7 @@ mod tests {
         assert_eq!(enabled(&view), [EditCommand::Assemble]);
         assert_eq!(next(&view), Some(EditCommand::Assemble));
         assert_eq!(code(&view, EditCommand::Untest), Some("V4011"));
+        assert_eq!(code(&view, EditCommand::Cancel), Some("V4011"));
     }
 
     #[test]

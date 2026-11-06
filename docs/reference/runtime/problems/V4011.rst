@@ -4,12 +4,14 @@ V4011
 
 .. problem-summary:: V4011
 
-``untestEdits`` was requested while a schema-changing candidate — a migration
-candidate whose layout hash differs from the running application's — is under
-test. Writes made under the candidate's layout have no reverse mapping for the
-variables the candidate added or removed, so reverting the code would strand
-state that belongs to a layout that no longer executes. The runtime refuses
-the untest and leaves the candidate active with the state untouched.
+``untestEdits`` or ``cancelEdits`` was requested while a schema-changing
+candidate — a migration candidate whose layout hash differs from the running
+application's — is under test. Writes made under the candidate's layout have no
+reverse mapping for the variables the candidate added or removed, and the old
+buffers are not kept, so reverting the code would strand state that belongs to a
+layout that no longer executes. Cancelling a candidate under test reverts it
+first, so it is refused for the same reason. The runtime
+refuses the command and leaves the candidate active with the state untouched.
 
 Example
 -------
@@ -24,11 +26,12 @@ to revert:
    {"command":"testEdits"}
    {"response":"ack"}
    {"command":"untestEdits"}
-   {"response":"error","vCode":"V4011","message":"untest is not supported after a schema-changing test; assemble or cancel instead"}
+   {"response":"error","vCode":"V4011","message":"untest and cancel are not supported after a schema-changing test; assemble instead"}
 
-To proceed, choose one of the exits the protocol offers for a migration
-candidate. ``assembleEdits`` commits the candidate: the migration is applied,
-the new schema becomes the running application, and the application
-generation advances. ``cancelEdits`` discards the candidate, but only while
-the original artifact is still active — before ``testEdits``. A logic-only
-edit keeps its untest path, as described in the online change protocol.
+To proceed, send ``assembleEdits``: it commits the candidate, the migration is
+applied, the new schema becomes the running application, and the application
+generation advances. It is the only exit of a migration candidate under test.
+Before ``testEdits`` the original artifact is still active, and
+``cancelEdits`` discards the candidate. A logic-only edit keeps its untest
+path and can be cancelled from the test as well, as described in the online
+change protocol.

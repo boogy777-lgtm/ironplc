@@ -157,10 +157,12 @@ pub(crate) fn edit_guard(state: EditState, command: EditCommand) -> Result<(), O
         EditState::Testing { migration } => match command {
             Accept => Err(CandidateAlreadyStaged),
             Test => Err(NotAllowedInThisMode),
-            // A migration candidate has no revert path.
+            // A migration candidate has no revert path, and discarding it
+            // would be one: the old buffers are not kept.
             Untest if migration => Err(UntestUnsupported),
             Untest => Ok(()),
             Assemble => Ok(()),
+            Cancel if migration => Err(UntestUnsupported),
             Cancel => Err(NotAllowedInThisMode),
         },
         EditState::TestPending { migration: _ } => match command {

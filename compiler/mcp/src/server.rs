@@ -403,7 +403,7 @@ impl IronPlcMcp {
     /// Reverts to the original artifact.
     #[tool(
         name = "hot_edit_untest",
-        description = "Switches back to the original artifact at the next scan boundary and drives one scan round, so the revert is executing when the call returns; process state is preserved. Refused with V4011 after a schema-changing test \u{2014} promote with `hot_edit_assemble` or discard with `hot_edit_cancel` instead. Pass `device` (`{address, port}` for a TCP connection, or `{device_id}` for a device that IronLink has a route to, see `browse_network`) to act on a device over the session protocol instead of the server's own session; the response then names the device that answered in `device`."
+        description = "Switches back to the original artifact at the next scan boundary and drives one scan round, so the revert is executing when the call returns; process state is preserved. Refused with V4011 after a schema-changing test \u{2014} promote with `hot_edit_assemble` instead. Pass `device` (`{address, port}` for a TCP connection, or `{device_id}` for a device that IronLink has a route to, see `browse_network`) to act on a device over the session protocol instead of the server's own session; the response then names the device that answered in `device`."
     )]
     async fn hot_edit_untest(
         &self,

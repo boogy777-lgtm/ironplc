@@ -28,10 +28,10 @@ pub enum OnlineChangeError {
     /// The candidate changes the state layout and its stable variable IDs do
     /// not justify a per-variable migration. Carries the planner's reason.
     MigrationUnsupported(MigrationError),
-    /// `untest` was called after a schema-changing test. Writes made under
-    /// the candidate's layout have no reverse mapping for added or removed
-    /// variables, so the change can only be assembled or cancelled while the
-    /// original is active.
+    /// `untest` or `cancel` was called while a schema-changing candidate is
+    /// under test. Writes made under the candidate's layout have no reverse
+    /// mapping for added or removed variables, and the old buffers are not
+    /// kept, so the change can only be assembled.
     UntestUnsupported,
     /// The requested operation needs a staged candidate and none is staged.
     NoCandidateStaged,
@@ -72,7 +72,7 @@ impl fmt::Display for OnlineChangeError {
             }
             OnlineChangeError::UntestUnsupported => write!(
                 f,
-                "untest is not supported after a schema-changing test; assemble or cancel instead"
+                "untest and cancel are not supported after a schema-changing test; assemble instead"
             ),
             OnlineChangeError::NoCandidateStaged => write!(f, "no candidate is staged"),
             OnlineChangeError::CandidateAlreadyStaged => {
@@ -172,7 +172,7 @@ mod tests {
         );
         assert_eq!(
             OnlineChangeError::UntestUnsupported.to_string(),
-            "untest is not supported after a schema-changing test; assemble or cancel instead"
+            "untest and cancel are not supported after a schema-changing test; assemble instead"
         );
         assert_eq!(
             OnlineChangeError::NoCandidateStaged.to_string(),
