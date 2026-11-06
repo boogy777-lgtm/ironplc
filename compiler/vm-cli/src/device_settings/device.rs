@@ -28,10 +28,11 @@
 //! fails (V6016) leaves the file and the running device as they were.
 
 use std::fs;
-use std::io::{self, Write};
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use ironplc_cli_support::durable_file;
 use ironplc_runtime::DeviceIdentity;
 
 use super::{os_random, DeviceSetting, DeviceSettings, Entries, Random, SettingsError};
@@ -229,28 +230,18 @@ fn render(settings: &DeviceSettings) -> String {
 }
 
 /// Writes the settings file as a temporary file renamed over it, so that the
-/// file is always the old content or the new, never a part of either. (Rust's
-/// `rename` replaces an existing file on Windows too.)
+/// file is always the old content or the new, never a part of either (see
+/// [`durable_file::replace_file`]).
 fn write_file(path: &Path, settings: &DeviceSettings) -> Result<(), VmError> {
-    let tmp = suffix(path, "tmp");
-    let fail = |action: &str, err: io::Error| {
-        VmError::io(
-            error::DEVICE_SETTINGS_WRITE,
-            format!(
-                "Unable to {action} the device settings file {}: {err}",
-                path.display()
-            ),
-        )
-    };
-    let mut file = fs::File::create(&tmp).map_err(|err| fail("create", err))?;
-    file.write_all(render(settings).as_bytes())
-        .map_err(|err| fail("write", err))?;
-    file.sync_all().map_err(|err| fail("flush", err))?;
-    drop(file);
-    fs::rename(&tmp, path).map_err(|err| {
-        if let Err(remove) = fs::remove_file(&tmp) {
-            log::warn!("unable to remove {}: {remove}", tmp.display());
-        }
-        fail("replace", err)
-    })
+    durable_file::replace_file(path, &suffix(path, "tmp"), render(settings).as_bytes()).map_err(
+        |err| {
+            VmError::io(
+                error::DEVICE_SETTINGS_WRITE,
+                format!(
+                    "Unable to replace the device settings file {}: {err}",
+                    path.display()
+                ),
+            )
+        },
+    )
 }

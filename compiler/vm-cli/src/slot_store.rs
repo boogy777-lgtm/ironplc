@@ -22,8 +22,9 @@
 //! naming the inactive slot at `seq + 1` and fsync — *before* the slot swap,
 //! so a crash never leaves new bytes in a slot that no marker residue names
 //! (the crash table's during-4/5 rows resolve by `seq`); delete the inactive
-//! slot if present (`std::fs::rename` never overwrites on Windows; the
-//! marker-named slot is never the delete target); rename the tmp into the
+//! slot if present (a step kept from when the store assumed `std::fs::rename`
+//! does not replace a file on Windows; it does, and the delete is harmless
+//! because the marker-named slot is never the delete target); rename the tmp into the
 //! inactive slot; delete the old marker; rename `marker.tmp` into the marker
 //! (same delete-before-rename constraint).
 //!
@@ -56,9 +57,10 @@
 
 use std::fmt;
 use std::fs::{self, File};
-use std::io::{Cursor, Read, Write};
+use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
 
+use ironplc_cli_support::durable_file;
 use ironplc_container::Container;
 use serde::{Deserialize, Serialize};
 
@@ -219,8 +221,9 @@ impl SlotStore {
         // new bytes from the old ones by seq.
         self.write_fsync(&self.marker_tmp, &marker_json(&next))?;
 
-        // rename never overwrites on Windows: delete the inactive slot
-        // first. The marker-named slot is never the delete target.
+        // Delete the inactive slot first (kept from when the store assumed
+        // rename does not replace on Windows; it does). The marker-named slot
+        // is never the delete target, so the delete is harmless.
         self.delete_if_present(&self.slot_path(next.slot))?;
         fs::rename(&self.tmp, self.slot_path(next.slot)).map_err(|err| {
             persist_error(format!(
@@ -287,19 +290,14 @@ impl SlotStore {
         Container::read_from(&mut Cursor::new(&bytes)).ok()
     }
 
-    /// Writes `bytes` to `path`, flushing and fsyncing the file. Directory
-    /// durability has no portable std API and stays the residual risk the
-    /// adoption algorithm exists to heal.
+    /// Writes `bytes` to `path`, flushing and fsyncing the file (see
+    /// [`durable_file::write_synced`]). Directory durability has no portable
+    /// std API and stays the residual risk the adoption algorithm exists to
+    /// heal.
     fn write_fsync(&self, path: &Path, bytes: &[u8]) -> Result<(), VmError> {
-        let mut file = File::create(path)
-            .map_err(|err| persist_error(format!("unable to create {}: {err}", path.display())))?;
-        file.write_all(bytes)
-            .map_err(|err| persist_error(format!("unable to write {}: {err}", path.display())))?;
-        file.flush()
-            .map_err(|err| persist_error(format!("unable to flush {}: {err}", path.display())))?;
-        file.sync_all()
-            .map_err(|err| persist_error(format!("unable to fsync {}: {err}", path.display())))?;
-        Ok(())
+        durable_file::write_synced(path, bytes).map_err(|err| {
+            persist_error(format!("unable to write {} durably: {err}", path.display()))
+        })
     }
 
     /// Deletes `path` if present; a missing file is the normal case (the
