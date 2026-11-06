@@ -863,7 +863,7 @@ A device that has not been given a program holds the empty application: a contai
 
 **REQ-CF-container-045** The empty application has no task, no program instance, no variable, no function, no constant and no type section, declares a call depth of one frame, and passes the load verification of every container (`ironplc_container::empty_application`, REQ-CF-container-029). It is built in that one function.
 
-**REQ-CF-container-046** The `content_hash` of the empty application is `EMPTY_APPLICATION_HASH` (`f363b8d33c67e163acb0b0a669a6d9ee5b3f81e13b59858a9234a85008dcb1c4` at format version 9). The hash covers the format version, so a new `FORMAT_VERSION` or a new header field changes it: the conformance test fails, and the change that alters the format regenerates the constant with it.
+**REQ-CF-container-046** The `content_hash` of the empty application is `EMPTY_APPLICATION_HASH`. The hash covers the format version, so a new `FORMAT_VERSION` or a new header field changes it: the conformance test fails, and the change that alters the format regenerates the constant with it, and the table of hashes in the `ironplcvm` reference (a test of `vm-cli` checks it).
 
 A device that holds the empty application does not scan: the device loop executes a round only when a task could run in it (an enabled cyclic or freewheeling task), so it idles on its command channel instead of repeating rounds that do nothing (ADR-0086).
 

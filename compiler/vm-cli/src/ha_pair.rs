@@ -27,7 +27,6 @@
 //! slice).
 
 use std::net::SocketAddr;
-use std::path::Path;
 
 use ironplc_redundancy::{AdmissionVerdict, NicPort, PairLink, RedundancyConfig, UdpPort};
 use ironplc_runtime::RuntimeHost;
@@ -36,7 +35,7 @@ use crate::device_loop::DeviceLoop;
 use crate::device_settings::device::Device;
 use crate::error::{self, VmError};
 use crate::serve::{boot_host, commit_assembled, serve_stdio};
-use crate::slot_store::SlotStore;
+use crate::slot_store::{Serving, SlotStore};
 
 /// The pump cadence in microseconds: how often the loop ticks the pair link,
 /// and the longest it waits for anything before ticking it. Bounds the pair's
@@ -49,17 +48,17 @@ use crate::slot_store::SlotStore;
 /// as dead.
 pub(crate) const PUMP_PERIOD_US: u64 = 5_000;
 
-/// Boots the committed artifact from the A/B slot store beside `path`,
+/// Boots the committed artifact from the A/B slot store of `serving`,
 /// composes the host with the pair link over UDP (`bind`, connected to
 /// the peer's `peer`), and serves commands on stdin and stdout while the device
 /// loop scans, until stdin reaches EOF or Ctrl+C.
 pub fn serve_pair(
-    path: &Path,
+    serving: Serving<'_>,
     config: RedundancyConfig,
     bind: SocketAddr,
     peer: SocketAddr,
 ) -> Result<(), VmError> {
-    let store = SlotStore::beside(path);
+    let store = serving.store();
     let container = store.boot()?;
     let mut host = boot_host(container)?;
     let port = UdpPort::bind(bind, peer).map_err(|err| {
@@ -76,7 +75,7 @@ pub fn serve_pair(
     })?;
     log::info!("serving the HA pair link on {local} (peer {peer})");
     let link = PairLink::new(config, port);
-    let mut device = Device::open(path)?;
+    let mut device = Device::open(serving.anchor())?;
     device.boot_application(&mut host);
 
     serve_stdio(|pacer, commands| DeviceLoop::paired(host, store, device, link, pacer, commands))

@@ -80,10 +80,12 @@ Commands
 :program:`ironplcvm version`
    Print the version number of the virtual machine.
 
-:program:`ironplcvm serve` *FILE*
+:program:`ironplcvm serve` [*FILE*]
    Load a bytecode container (``.iplc``) file into the runtime host, run its
    scan cycle, and serve the hot-edit command protocol on stdin/stdout until
-   EOF or :kbd:`Ctrl+C`. One line of
+   EOF or :kbd:`Ctrl+C`. Without *FILE* the device starts the program it last
+   committed, and the empty application when it has none (see
+   :ref:`ironplcvm-empty-application`). One line of
    stdin carries one command; one line of stdout carries one response,
    flushed after every line. Startup prints nothing to stdout — the stream
    carries protocol lines only, so the session is safe to script. The device
@@ -307,6 +309,62 @@ or refuse the command. A device that predates the field omits it.
 
 The scan control (``startScan`` and ``stopScan``) and ``setDeviceSettings``
 are allowed in every stage and are not part of the view.
+
+.. _ironplcvm-empty-application:
+
+The empty application
+=====================
+
+:program:`ironplcvm serve` needs no container file. A device that has not been
+given a program holds the *empty application*: a container with no program and
+no task. It is not a state of the device. The device loads, verifies and runs it
+as it does any other program, and the edit commands treat it as the program the
+device runs. A device that holds it runs no round, because no task is there to
+run, and it waits for the next command instead of repeating rounds that do
+nothing.
+
+Start the device without *FILE*:
+
+.. code-block:: shell
+
+   ironplcvm serve --listen 0.0.0.0
+
+The device keeps its files in the current directory, named :file:`ironplcvm.*`
+where a device that serves a file names them after the file: the slot store
+(:file:`ironplcvm.slot-a`, :file:`ironplcvm.slot-b` and :file:`ironplcvm.marker`),
+the settings (:file:`ironplcvm.device.json`), the retained values
+(:file:`ironplcvm.retained`) and the note of an unfinished edit
+(:file:`ironplcvm.edit`). The first start writes the empty application as the
+first generation in the slot store. A later start boots the newest committed
+generation in the store, so a device that was given a program with
+``assembleEdits`` starts that program again, and the empty application only
+until then. Start the device in the same directory each time; a device started
+in another directory is another device, with another ``deviceId``.
+
+A controller holds no application exactly when the ``contentHash`` of its
+``application`` block (see :ref:`ironplcvm-edit-view`) is the content hash of the
+empty application. The hash is a constant of the container format. It depends on
+the format version, so it changes when the format version does:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Container format version
+     - Content hash of the empty application
+   * - 9
+     - ``f363b8d33c67e163acb0b0a669a6d9ee5b3f81e13b59858a9234a85008dcb1c4``
+
+The container format
+--------------------
+
+The ``identity`` answer carries the field ``containerFormat``: the container
+format version that the device runs and accepts, a whole number. A workstation
+that has built a container of another format version can say that the device
+refuses it before it sends the container. The device refuses a container of
+another format version with :doc:`V4016 <problems/V4016>`, and the message names
+both versions, as in ``unsupported container format version 8: this reader
+supports version 9``. A device that predates the field omits it, and the
+protocol version stays 2.
 
 .. _ironplcvm-device-settings:
 
@@ -582,6 +640,14 @@ Examples
    .. code-block:: shell
 
       ironplcvm serve --listen 192.168.1.20:7000 --no-discovery main.iplc
+
+7. Serve the engineering session with no program, in the current directory. The
+   device holds the empty application until it is given a program (see
+   :ref:`ironplcvm-empty-application`):
+
+   .. code-block:: shell
+
+      ironplcvm serve --listen 0.0.0.0
 
 See Also
 ========

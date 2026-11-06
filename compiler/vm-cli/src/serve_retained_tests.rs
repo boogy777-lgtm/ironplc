@@ -24,7 +24,7 @@ use crate::device_settings::device::Device;
 use crate::error;
 use crate::serve::{compose_host, stop_device};
 use crate::serve_tests::{compile_container, container_bytes};
-use crate::slot_store::{suffix, SlotStore};
+use crate::slot_store::{suffix, Serving, SlotStore};
 
 /// A program with one retained variable, `Kept`, and one that is not,
 /// `Plain`, both incremented by `step` per scan. The declarations are the same
@@ -75,7 +75,7 @@ impl Served {
     /// application, the host is composed, the device opens its files and
     /// applies the retained file.
     pub(crate) fn boot(&self) -> (RuntimeHost, Device, SlotStore) {
-        let store = SlotStore::beside(&self.file);
+        let store = Serving::File(&self.file).store();
         let container = store.boot().unwrap();
         let (mut host, _shell) = compose_host(container, false).unwrap();
         let mut device = Device::open(&self.file).unwrap();

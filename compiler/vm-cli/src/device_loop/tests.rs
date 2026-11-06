@@ -294,6 +294,40 @@ fn step_when_program_is_freewheeling_then_many_commands_in_one_iteration_are_all
     assert_eq!(parsed(&answers[2])["response"], "status");
 }
 
+/// The empty application has no task that could run, so the loop has nothing to
+/// run and nothing to wait for: it runs no round and idles on its channel, one
+/// stop poll per iteration, instead of repeating rounds as a freewheeling
+/// program does. No branch names the empty application; "no task is runnable"
+/// is the whole condition.
+#[spec_test(REQ_VC_vm_cli_060)]
+#[test]
+fn step_when_no_task_is_runnable_then_no_round_runs_and_every_wait_is_the_stop_poll() {
+    let mut rig = Rig::over(ironplc_container::empty_application().unwrap());
+
+    rig.steps(4);
+
+    assert_eq!(rig.rounds(), 0);
+    assert_eq!(rig.clock.waits(), vec![50_000, 100_000, 150_000, 200_000]);
+}
+
+#[spec_test(REQ_VC_vm_cli_060)]
+#[test]
+fn step_when_application_is_empty_then_commands_are_answered_and_identity_holds_no_application() {
+    let mut rig = Rig::over(ironplc_container::empty_application().unwrap());
+    rig.steps(2);
+
+    let identity = rig.ask(IDENTITY);
+    let status = rig.ask(STATUS);
+
+    assert_eq!(
+        identity["application"]["contentHash"],
+        ironplc_container::integrity::hash_hex(&ironplc_container::EMPTY_APPLICATION_HASH)
+            .to_string()
+    );
+    assert_eq!(status["mode"], "normal");
+    assert_eq!(rig.rounds(), 0);
+}
+
 #[spec_test(REQ_VC_vm_cli_044)]
 #[test]
 fn step_when_round_traps_then_device_is_faulted_and_scans_no_more() {

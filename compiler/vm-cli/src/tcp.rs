@@ -24,7 +24,6 @@
 
 use std::io::{self, Read};
 use std::net::{IpAddr, Shutdown, SocketAddr, TcpListener, TcpStream};
-use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
 
@@ -39,7 +38,7 @@ use crate::discovery::{self, Discovery};
 use crate::error::{self, VmError};
 use crate::pacer::Pacer;
 use crate::serve::compose_host;
-use crate::slot_store::SlotStore;
+use crate::slot_store::Serving;
 
 /// The one-line refusal a second connection receives (V6014): it names the
 /// single-session policy the attempt ran into (ADR-0065).
@@ -247,15 +246,15 @@ pub(crate) fn parse_listen_address(text: &str) -> Result<SocketAddr, String> {
 /// ADR-0084), bound before the first connection is accepted: V6017 when it
 /// cannot be.
 pub(crate) fn serve_tcp(
-    path: &Path,
+    serving: Serving<'_>,
     addr: SocketAddr,
     ha_simulated_peer: bool,
     discovery: Discovery,
 ) -> Result<(), VmError> {
-    let store = SlotStore::beside(path);
+    let store = serving.store();
     let container = store.boot()?;
     let (mut host, shell) = compose_host(container, ha_simulated_peer)?;
-    let mut device = Device::open(path)?;
+    let mut device = Device::open(serving.anchor())?;
     device.boot_application(&mut host);
 
     let listener = TcpListener::bind(addr).map_err(|err| {

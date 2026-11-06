@@ -25,7 +25,12 @@
 //!
 //! A program without a cyclic task (freewheeling) has no deadline to wait for,
 //! so its next round starts at once; the channel is still looked at once per
-//! round, so commands are not starved.
+//! round, so commands are not starved. An application with no task that could run
+//! (the empty application, see `ironplc_container::empty_application`) has nothing
+//! to run and nothing to wait for: the loop idles on its command channel, as it
+//! does for a device that may not scan, and runs a round only for a command that
+//! needs a boundary. No branch tells the empty application apart; the question is
+//! only whether a task is runnable ([`Core::has_work`]).
 //!
 //! A round that traps stops the scan: the device is faulted, runs no further
 //! round, keeps answering every command, and reports the fault in `identity`
@@ -190,6 +195,15 @@ impl<P: NicPort> Core<'_, P> {
     /// that decides it.
     pub(crate) fn can_scan(&self) -> bool {
         self.host.execution_permitted() && self.device.scans()
+    }
+
+    /// Whether a round would execute a task: the device may scan
+    /// ([`can_scan`](Self::can_scan)) and the application has a task that could
+    /// run. A device without one (the empty application) is not busy and not
+    /// waiting for a deadline: the loop idles instead of repeating rounds that
+    /// do nothing.
+    pub(crate) fn has_work(&self) -> bool {
+        self.can_scan() && self.host.has_runnable_task()
     }
 
     /// Executes one command line. The simulated pair ticks first: the command
@@ -402,7 +416,7 @@ impl<C: Clock, P: NicPort> DeviceLoop<C, P> {
             core.host.rearm_cyclic_tasks(now_us);
         }
         self.scanning = may_scan;
-        let due = may_scan && is_due(now_us, core.host.next_due_us());
+        let due = core.has_work() && is_due(now_us, core.host.next_due_us());
         if due || !self.parked.is_empty() {
             core.round(now_us);
         }
@@ -419,9 +433,10 @@ impl<C: Clock, P: NicPort> DeviceLoop<C, P> {
 
         // The wait ends at the next deadline of a cyclic task or at the next tick
         // of the pair link, whichever comes first; a freewheeling program does
-        // not wait for either, a device that does not scan waits for the tick.
+        // not wait for either, a device that does not scan or has no task to run
+        // waits for the tick.
         let pump_us = core.is_paired().then_some(self.next_pump_us);
-        let waited = if core.can_scan() {
+        let waited = if core.has_work() {
             let wake_us = match (core.host.next_due_us(), pump_us) {
                 (Some(due_us), Some(pump_us)) => Some(due_us.min(pump_us)),
                 (due_us, _) => due_us,

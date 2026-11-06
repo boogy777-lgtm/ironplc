@@ -47,6 +47,10 @@
 //! | after slot swap, before marker flip | inactive holds verified new bytes; marker residue names it | adopt the verified inactive |
 //! | marker flip | marker or marker.tmp names the new slot | boot the newest verifiable bytes the residue names |
 //!
+//! A device that serves no file ([`Serving::NoFile`]) names the files after
+//! `ironplcvm` in the current directory instead, and seeds a store without
+//! files with the empty application in place of the file's bytes.
+//!
 //! Single owner: only `ironplcvm serve` composes a store — the one
 //! file-backed shell with an assemble path.
 //!
@@ -61,7 +65,7 @@ use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
 
 use ironplc_cli_support::durable_file;
-use ironplc_container::Container;
+use ironplc_container::{empty_application_bytes, Container};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{self, VmError};
@@ -92,10 +96,68 @@ struct Marker {
     seq: u64,
 }
 
+/// What a device serves: the container file named on the command line, or no
+/// file, in which case the device holds the empty application until it is given
+/// another (`ironplc_container::empty_application`).
+///
+/// The one place that turns the optional argument of `serve` into the two things
+/// the rest of the device is built from: the path its files are named after
+/// ([`anchor`](Self::anchor)) and the slot store that boots it
+/// ([`store`](Self::store)).
+#[derive(Clone, Copy, Debug)]
+pub enum Serving<'a> {
+    /// The container file; the files of the device sit beside it.
+    File(&'a Path),
+    /// No file: the files of the device sit in the current directory, named after
+    /// [`NO_FILE_ANCHOR`].
+    NoFile,
+}
+
+/// The path the files of a device that serves no file are named after, relative
+/// to the current directory: `ironplcvm.slot-a`, `ironplcvm.device.json`, and
+/// so on, as `app.iplc.slot-a` and `app.iplc.device.json` for a served file.
+const NO_FILE_ANCHOR: &str = "ironplcvm";
+
+impl<'a> Serving<'a> {
+    /// What the optional file argument of `serve` serves.
+    pub fn from_argument(file: Option<&'a Path>) -> Self {
+        file.map_or(Serving::NoFile, Serving::File)
+    }
+
+    /// The path the files of the device are named after: the served file, or
+    /// the fixed name in the current directory.
+    pub fn anchor(&self) -> &Path {
+        match self {
+            Serving::File(file) => file,
+            Serving::NoFile => Path::new(NO_FILE_ANCHOR),
+        }
+    }
+
+    /// The slot store of the device; see [`SlotStore::boot`] for what a store
+    /// without files is seeded from.
+    pub fn store(&self) -> SlotStore {
+        match self {
+            Serving::File(file) => SlotStore::beside(file),
+            Serving::NoFile => SlotStore::with_seed(self.anchor(), Seed::EmptyApplication),
+        }
+    }
+}
+
+/// What a store without files is seeded from at its first boot.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Seed {
+    /// The served container file.
+    File,
+    /// The empty application: the device was started with no file.
+    EmptyApplication,
+}
+
 /// File-backed A/B slot persistence beside the served container.
 pub struct SlotStore {
-    /// The served container path — the bootstrap anchor on first serve.
+    /// The served container path (or the anchor of a device that serves no
+    /// file) — the bootstrap anchor on first serve.
     file: PathBuf,
+    seed: Seed,
     slot_a: PathBuf,
     slot_b: PathBuf,
     marker: PathBuf,
@@ -105,7 +167,11 @@ pub struct SlotStore {
 
 impl SlotStore {
     /// Builds the store layout beside `file` without touching disk.
-    pub fn beside(file: &Path) -> Self {
+    fn beside(file: &Path) -> Self {
+        Self::with_seed(file, Seed::File)
+    }
+
+    fn with_seed(file: &Path, seed: Seed) -> Self {
         SlotStore {
             slot_a: suffix(file, "slot-a"),
             slot_b: suffix(file, "slot-b"),
@@ -113,6 +179,7 @@ impl SlotStore {
             marker_tmp: suffix(file, "marker.tmp"),
             tmp: suffix(file, "tmp"),
             file: file.to_path_buf(),
+            seed,
         }
     }
 
@@ -171,19 +238,8 @@ impl SlotStore {
             ));
         }
 
-        // First serve of a plain file: seed the store from it.
-        let bytes = fs::read(&self.file).map_err(|err| {
-            VmError::io(
-                error::FILE_OPEN,
-                format!("Unable to open {}: {err}", self.file.display()),
-            )
-        })?;
-        let container = Container::read_from(&mut Cursor::new(&bytes)).map_err(|err| {
-            VmError::io(
-                error::CONTAINER_READ,
-                format!("Unable to read container {}: {err}", self.file.display()),
-            )
-        })?;
+        // First serve: seed the store from what the device serves.
+        let (bytes, container) = self.seed_application()?;
         self.write_fsync(&self.slot_a, &bytes)?;
         self.write_fsync(
             &self.marker,
@@ -193,6 +249,34 @@ impl SlotStore {
             }),
         )?;
         Ok(container)
+    }
+
+    /// The wire bytes and the container a store without files is seeded from:
+    /// the served file, or the empty application of a device that serves no
+    /// file. Either way the bytes become slot A, so the rollback anchor exists
+    /// from the first commit on.
+    fn seed_application(&self) -> Result<(Vec<u8>, Container), VmError> {
+        let bytes = match self.seed {
+            Seed::File => fs::read(&self.file).map_err(|err| {
+                VmError::io(
+                    error::FILE_OPEN,
+                    format!("Unable to open {}: {err}", self.file.display()),
+                )
+            })?,
+            Seed::EmptyApplication => empty_application_bytes().map_err(|err| {
+                VmError::io(
+                    error::CONTAINER_READ,
+                    format!("Unable to build the empty application: {err}"),
+                )
+            })?,
+        };
+        let container = Container::read_from(&mut Cursor::new(&bytes)).map_err(|err| {
+            VmError::io(
+                error::CONTAINER_READ,
+                format!("Unable to read container {}: {err}", self.file.display()),
+            )
+        })?;
+        Ok((bytes, container))
     }
 
     /// Persists one commit: the ordered steps of the durability invariant.
@@ -639,5 +723,59 @@ mod tests {
             marker_of(&dir, "marker"),
             serde_json::json!({"slot": "a", "seq": 1})
         );
+    }
+
+    /// The store of a device that serves no file, in a fresh temp dir. The
+    /// relative anchor of [`Serving::NoFile`] is the current directory, which a
+    /// test must not change, so the test names the anchor itself.
+    fn store_without_file_in(dir: &TempDir) -> SlotStore {
+        SlotStore::with_seed(&dir.path().join(NO_FILE_ANCHOR), Seed::EmptyApplication)
+    }
+
+    #[test]
+    fn serving_when_no_file_then_the_anchor_is_the_fixed_name_and_a_file_is_its_own_anchor() {
+        let file = Path::new("dir/app.iplc");
+
+        assert_eq!(
+            Serving::from_argument(None).anchor(),
+            Path::new("ironplcvm")
+        );
+        assert_eq!(Serving::from_argument(Some(file)).anchor(), file);
+    }
+
+    #[test]
+    fn boot_when_no_file_and_no_store_then_the_empty_application_seeds_slot_a_and_marker() {
+        let dir = TempDir::new().unwrap();
+        let store = store_without_file_in(&dir);
+
+        let booted = store.boot().unwrap();
+
+        assert_eq!(
+            booted.header.content_hash,
+            ironplc_container::EMPTY_APPLICATION_HASH
+        );
+        assert_eq!(
+            std::fs::read(dir.path().join("ironplcvm.slot-a")).unwrap(),
+            ironplc_container::empty_application_bytes().unwrap()
+        );
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(
+                &std::fs::read_to_string(dir.path().join("ironplcvm.marker")).unwrap()
+            )
+            .unwrap(),
+            serde_json::json!({"slot": "a", "seq": 1})
+        );
+    }
+
+    #[test]
+    fn boot_when_no_file_and_a_store_exists_then_the_committed_application_boots() {
+        let dir = TempDir::new().unwrap();
+        let store = store_without_file_in(&dir);
+        store.boot().unwrap();
+        store.commit(&artifact(7)).unwrap();
+
+        let booted = store_without_file_in(&dir).boot().unwrap();
+
+        assert_eq!(container_bytes(&booted), artifact(7));
     }
 }
