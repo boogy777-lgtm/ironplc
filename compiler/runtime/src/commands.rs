@@ -14,7 +14,7 @@ use std::collections::BTreeMap;
 use std::io::Cursor;
 
 use ironplc_container::integrity::{self, HASH_LEN, NO_HASH};
-use ironplc_container::Container;
+use ironplc_container::{Container, FORMAT_VERSION};
 use serde::{Deserialize, Serialize};
 
 use crate::conversion::type_name;
@@ -381,6 +381,14 @@ pub struct IdentityPayload {
     /// reader that finds it absent reads `running`.
     #[serde(default)]
     pub run_state: RunState,
+    /// The container format version this device runs and accepts
+    /// (`FORMAT_VERSION` of the container crate it was built with). A client
+    /// compares it with the format of the container it has built, so it can
+    /// say "container format refused" before it sends the download. Absent
+    /// from a device that predates the field; a client then learns the refusal
+    /// from the device when it sends the container.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub container_format: Option<u16>,
 }
 
 /// Whether a device executes scan rounds. Apart from the edit stage (a device
@@ -638,6 +646,7 @@ pub fn execute(command: Command, host: &mut RuntimeHost, device: &DeviceIdentity
             candidate_lost: None,
             fault: None,
             run_state: RunState::default(),
+            container_format: Some(FORMAT_VERSION),
         })),
         Command::GetStatus => Response::Status(StatusPayload::from(host.status())),
         Command::AcceptEdits {

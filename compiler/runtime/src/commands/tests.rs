@@ -154,6 +154,7 @@ fn identity_response_of(
         candidate_lost: None,
         fault: None,
         run_state: RunState::Running,
+        container_format: Some(ironplc_container::FORMAT_VERSION),
     }))
 }
 
@@ -788,4 +789,28 @@ fn identity_when_stopped_then_run_state_round_trips() {
 
     assert_eq!(value["runState"], "stopped");
     assert_eq!(parse_response(&line).unwrap(), Response::Identity(payload));
+}
+
+#[test]
+fn render_response_when_identity_then_container_format_is_the_format_version() {
+    let line = render_response(&identity_response(None)).unwrap();
+    let value: serde_json::Value = serde_json::from_str(&line).unwrap();
+
+    assert_eq!(
+        value["containerFormat"],
+        u64::from(ironplc_container::FORMAT_VERSION)
+    );
+}
+
+#[test]
+fn parse_response_when_identity_lacks_container_format_then_it_is_unknown() {
+    let line = render_response(&identity_response(None)).unwrap();
+    let mut value: serde_json::Value = serde_json::from_str(&line).unwrap();
+    value.as_object_mut().unwrap().remove("containerFormat");
+
+    let Response::Identity(parsed) = parse_response(&value.to_string()).unwrap() else {
+        panic!("an identity line parses as an identity");
+    };
+
+    assert_eq!(parsed.container_format, None);
 }
