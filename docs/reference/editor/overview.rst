@@ -150,8 +150,9 @@ dialog says so while the candidate exists. A refused command is shown with the
 problem code of the controller, and the dialog shows the state the controller
 reports afterwards.
 
-The Accept stage refuses (:doc:`E0015 <problems/E0015>`) when the application on
-the controller is not the one the project last downloaded to it. When the
+The Accept stage begins only when the go-online comparison allows an online change;
+when it does not, the editor says why in the words of the comparison and offers
+:guilabel:`Download` when the comparison enables it. When the
 controller acknowledges the assemble, the editor writes the download record of the
 controller (:program:`ironplcc record-download`), as :ref:`Download to Controller
 <editor-download>` does.

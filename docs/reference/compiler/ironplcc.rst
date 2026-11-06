@@ -147,9 +147,8 @@ Download Record Commands
    of the application (the one the build record gives, else *STEM*), the hashes
    and the size of the container that was sent, which the command reads from the
    header of the container, the generation counters that the device reported
-   after the download, and the time in UTC. The editor compares the content hash
-   of the record with the one the device reports when it connects, which
-   :doc:`/reference/editor/problems/E0015` describes.
+   after the download, and the time in UTC. The go-online comparison reads the
+   record when the editor connects (:program:`ironplcc online-compare`).
 
    The container that was sent is *APPLICATION* unless ``--container`` names
    another file. The command fails, with a message and without writing, when the
