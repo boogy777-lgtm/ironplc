@@ -60,6 +60,7 @@ mod data_region;
 mod emit;
 mod optimize;
 mod persistent;
+mod retained;
 mod source_lookup;
 mod stack_balance;
 mod string_storage;

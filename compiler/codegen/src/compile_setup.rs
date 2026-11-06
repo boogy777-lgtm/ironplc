@@ -328,6 +328,38 @@ pub(crate) fn assign_variables(
     Ok(())
 }
 
+/// Assigns the storage of the declarations of the persistent part (the globals
+/// and the variables of the program) and records which of them are retained
+/// (ADR-0085).
+///
+/// This is [`assign_variables`] one declaration at a time, so that the run of
+/// the data region reserved for each declaration is known: the retained runs
+/// are the storage of the declarations that are declared `RETAIN` or
+/// `PERSISTENT`. The working memory of a program (its `VAR_TEMP`) and of
+/// functions, methods and function block bodies is assigned by other paths and
+/// is never retained.
+pub(crate) fn assign_persistent_variables(
+    ctx: &mut CompileContext,
+    builder: &mut ContainerBuilder,
+    declarations: &[VarDecl],
+    types: &TypeEnvironment,
+    stable_var_ids: &[(Id, u64)],
+) -> Result<(), Diagnostic> {
+    for decl in declarations {
+        let data_start = ctx.data_region_offset;
+        assign_variables(
+            ctx,
+            builder,
+            std::slice::from_ref(decl),
+            types,
+            stable_var_ids,
+            Placement::Program,
+        )?;
+        crate::retained::record_declaration(ctx, decl, data_start..ctx.data_region_offset);
+    }
+    Ok(())
+}
+
 /// Maps a DSL VariableType to the debug section var_section encoding.
 pub(crate) fn map_var_section(vt: &VariableType) -> u8 {
     match vt {

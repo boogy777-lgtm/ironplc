@@ -24,9 +24,10 @@
 //! string are applied the way they are anywhere else.
 
 use std::collections::{BTreeMap, HashMap};
+use std::ops::Range;
 
 use ironplc_analyzer::TypeEnvironment;
-use ironplc_container::{CharWidth, FbTypeDescriptor, FbTypeId, FieldEntry, VarEntry};
+use ironplc_container::{CharWidth, FbTypeDescriptor, FbTypeId, FieldEntry, RetainKind, VarEntry};
 use ironplc_dsl::common::{
     FunctionBlockDeclaration, InitialValueAssignmentKind, VarDecl, VariableType,
 };
@@ -66,6 +67,10 @@ pub(crate) struct FbLayout {
     pub(crate) storage: Vec<FieldStorage>,
     /// Bytes an instance occupies: its slots, then its runs.
     pub(crate) instance_bytes: u32,
+    /// The bytes of an instance that hold a retained field, relative to the
+    /// start of the instance: the slot of each field declared `RETAIN` or
+    /// `PERSISTENT` and, for a string, its run (ADR-0085).
+    pub(crate) retained: Vec<(RetainKind, Range<u32>)>,
 }
 
 impl FbLayout {
@@ -109,8 +114,14 @@ pub(crate) fn instance_fields(fb: &FunctionBlockDeclaration) -> Vec<VarDecl> {
 pub(crate) fn layout_instance(fields: &[&VarDecl]) -> Result<FbLayout, Diagnostic> {
     let mut instance_bytes = fields.len() as u32 * ironplc_container::SLOT_BYTES;
     let mut storage = Vec::new();
+    let mut retained = Vec::new();
 
     for (slot, decl) in fields.iter().enumerate() {
+        let kind = crate::retained::retain_kind(&decl.qualifier);
+        if let Some(kind) = kind {
+            let start = slot as u32 * ironplc_container::SLOT_BYTES;
+            retained.push((kind, start..start + ironplc_container::SLOT_BYTES));
+        }
         let (Some(id), InitialValueAssignmentKind::String(string_init)) =
             (decl.identifier.symbolic_id(), &decl.initializer)
         else {
@@ -127,6 +138,9 @@ pub(crate) fn layout_instance(fields: &[&VarDecl]) -> Result<FbLayout, Diagnosti
                     "Function block instance exceeds the data region",
                 ))
             })?;
+        if let Some(kind) = kind {
+            retained.push((kind, offset..instance_bytes));
+        }
         storage.push(FieldStorage {
             decl: (*decl).clone(),
             key: id.to_string().to_lowercase(),
@@ -140,6 +154,7 @@ pub(crate) fn layout_instance(fields: &[&VarDecl]) -> Result<FbLayout, Diagnosti
     Ok(FbLayout {
         storage,
         instance_bytes,
+        retained,
     })
 }
 
