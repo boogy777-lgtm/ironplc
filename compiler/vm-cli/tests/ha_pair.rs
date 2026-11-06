@@ -387,6 +387,8 @@ fn converged_pair(dir: &TempDir) -> (Session, Session) {
 fn ha_pair_when_accept_test_assemble_then_both_units_commit_one_generation() {
     let dir = TempDir::new().unwrap();
     let (mut a, mut b) = converged_pair(&dir);
+    let content_hash_before =
+        a.command(r#"{"command":"identity"}"#)["application"]["contentHash"].clone();
 
     // Accept on the Primary, naming the edit.
     let candidate = compile_with_ids(CANDIDATE_SOURCE, &[("Counter", 1), ("Gauge", 2)]);
@@ -435,7 +437,7 @@ fn ha_pair_when_accept_test_assemble_then_both_units_commit_one_generation() {
 
     // Assemble (ADR-0064(h)): one transaction across the pair. Both
     // units promote the same canonical application generation, the
-    // candidate is gone, and the epochs converge on the minted value.
+    // candidate is gone.
     let assembled = a.command(r#"{"command":"assembleEdits"}"#);
     assert_eq!(assembled["response"], "ack");
     let a_status = a.query_until(
@@ -452,21 +454,49 @@ fn ha_pair_when_accept_test_assemble_then_both_units_commit_one_generation() {
     assert_eq!(b_status["mode"], "normal");
 
     // The epoch transaction: the assemble boundary minted the epoch on
-    // the owner; the standby adopted it off the wire.
-    let epoch_a = loop {
-        let status = a.command(r#"{"command":"haStatus"}"#);
-        a.record(&status);
-        if status["local"]["sync"] == "syncReady" && status["epoch"] == status["peer"]["epoch"] {
-            break status["epoch"].as_u64().unwrap();
-        }
-        std::thread::sleep(Duration::from_millis(20));
-    };
+    // the owner (which keeps committing rounds, one epoch each); the
+    // standby adopts it off the wire and trails it. So the check is the
+    // intent of the transaction, not an instant of equality: A's epoch
+    // read at the assemble is reached by B, A stays in sync, and both
+    // units name the same committed application.
+    let epoch_a = a.command(r#"{"command":"haStatus"}"#)["epoch"]
+        .as_u64()
+        .unwrap();
+    assert!(epoch_a > 0, "the owner minted no epoch for its rounds");
+    a.query_until(
+        r#"{"command":"haStatus"}"#,
+        Duration::from_secs(10),
+        |status| status["local"]["sync"] == "syncReady",
+    );
     let status_b = b.query_until(
         r#"{"command":"haStatus"}"#,
         Duration::from_secs(10),
-        |status| status["epoch"].as_u64() == Some(epoch_a),
+        |status| {
+            status["epoch"]
+                .as_u64()
+                .is_some_and(|epoch| epoch >= epoch_a)
+        },
     );
     b.record(&status_b);
+    let identity_a_after = a.command(r#"{"command":"identity"}"#);
+    let identity_b_after = b.command(r#"{"command":"identity"}"#);
+    assert_eq!(
+        identity_a_after["application"]["contentHash"],
+        identity_b_after["application"]["contentHash"],
+        "the units hold different committed applications"
+    );
+    assert_ne!(
+        identity_a_after["application"]["contentHash"], content_hash_before,
+        "the committed application did not change"
+    );
+    assert_eq!(
+        identity_a_after["application"]["application"].as_u64(),
+        Some(offered)
+    );
+    assert_eq!(
+        identity_b_after["application"]["application"].as_u64(),
+        Some(offered)
+    );
 
     // ADR-0064 amendment: both units persisted the identical committed
     // bytes inside the one transaction.

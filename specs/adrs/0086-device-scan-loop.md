@@ -365,21 +365,20 @@ of the loop, as the standalone and the simulated shells are.
   and a unit of a pair honours Run and Stop.
 - Good, because the owner of a pair now runs its application between commands,
   with the pacing of `run`.
-- Bad, because the pair-wide epoch is a `u32` that saturates, and it is minted
-  once per committed round (ADR-0062). A freewheeling program commits millions of
-  rounds per second, and a task of 1 ms commits 1000 per second: the epoch
-  stops advancing after about 20 minutes and about 50 days respectively. The
-  owner-alive evidence of the takeover is a latch, so failover still works after
-  a saturation, but the epoch stops protecting against stale packets. This is a
-  defect of the producer rule that continuous scanning exposes and not of the
-  loop, and it is an open item: a wider epoch, or an epoch minted per pump period
-  instead of per round, is a decision for the redundancy ADRs.
-- Bad, because the two-process test
+- Neutral, because the pair-wide epoch is minted once per committed round
+  (ADR-0062) and continuous scanning makes that rate high: a freewheeling program
+  commits millions of rounds per second. The epoch was a `u32` that would have
+  saturated in about 20 minutes at that rate; the 64-bit epoch of the amendment of
+  ADR-0062 resolves it (about 585,000 years at a million rounds per second). The
+  mint rule (one epoch per committed round, only at scan commit) is kept.
+- Neutral, because the two-process test
   `ha_pair_when_accept_test_assemble_then_both_units_commit_one_generation`
-  assumed that the owner commits rounds only on commands: it waits for the epoch
+  assumed that the owner commits rounds only on commands: it waited for the epoch
   of the owner to equal the epoch it last observed from the standby, which cannot
   hold while the owner commits rounds all the time (the standby trails by
-  design). The test is reported and was not edited.
+  design). The test now asserts its intent: both units hold the same committed
+  application, and the standby's epoch reaches the owner's epoch read at the
+  assemble, each wait with a deadline.
 
 Confirmation: `compiler/vm-cli/src/device_loop/tests/pair.rs` drives the loop with
 a loopback `PairLink` on the fake clock: the Primary scans with no command and

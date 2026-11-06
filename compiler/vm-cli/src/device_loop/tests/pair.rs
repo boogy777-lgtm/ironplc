@@ -168,10 +168,10 @@ impl PairRig {
     }
 
     /// The epoch of the unit's link.
-    fn epoch(&mut self) -> u32 {
+    fn epoch(&mut self) -> u64 {
         match self.device_loop.core().ha {
             Some(Ha::Pair(link)) => link.epoch().raw(),
-            _ => u32::MAX,
+            _ => u64::MAX,
         }
     }
 
@@ -215,7 +215,7 @@ fn step_when_pair_unit_scans_then_each_round_commit_reaches_the_link() {
 
     let rounds = rig.rounds();
     assert!(rounds > 0);
-    assert_eq!(u64::from(rig.epoch()), rounds);
+    assert_eq!(rig.epoch(), rounds);
 }
 
 #[spec_test(REQ_VC_vm_cli_051)]
@@ -300,7 +300,7 @@ fn step_when_pair_primary_is_started_after_a_stop_then_it_scans_again() {
 
     assert_eq!(started["runState"], "running");
     assert!(rig.rounds() > rounds);
-    assert_eq!(u64::from(rig.epoch()), rig.rounds());
+    assert_eq!(rig.epoch(), rig.rounds());
 }
 
 #[spec_test(REQ_VC_vm_cli_052)]
