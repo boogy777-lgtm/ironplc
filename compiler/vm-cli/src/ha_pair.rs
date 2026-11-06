@@ -36,7 +36,7 @@ use ironplc_runtime::RuntimeHost;
 
 use crate::device_settings::device::Device;
 use crate::error::{self, VmError};
-use crate::serve::{boot_host, drive_scan_round, handle_line, persist_commit, Ha};
+use crate::serve::{boot_host, commit_assembled, drive_scan_round, handle_line, stop_device, Ha};
 use crate::slot_store::SlotStore;
 
 /// The pump cadence: how long the session loop waits for a command line
@@ -72,6 +72,7 @@ pub fn serve_pair(
     log::info!("serving the HA pair link on {local} (peer {peer})");
     let mut link = PairLink::new(config, port);
     let mut device = Device::open(path)?;
+    device.boot_application(&mut host);
 
     // The stdin reader thread: the session loop multiplexes commands and
     // the pump over the channel, so the pair link outlives idle periods
@@ -89,7 +90,7 @@ pub fn serve_pair(
 
     let stdout = io::stdout();
     let mut out = stdout.lock();
-    serve_pair_loop(
+    let session = serve_pair_loop(
         &mut host,
         &mut store,
         &mut link,
@@ -102,7 +103,8 @@ pub fn serve_pair(
             error::SESSION_IO,
             format!("unable to read or write the command session: {err}"),
         )
-    })
+    });
+    stop_device(&mut device, &host, session)
 }
 
 /// The pair-mode session loop: waits for a command line (or the pump
@@ -133,12 +135,13 @@ fn serve_pair_loop(
             if let Some(err) = drive_scan_round(host, Some(&mut Ha::Pair(link))) {
                 log::error!("takeover scan round trapped: {err}");
             }
+            device.scan_boundary(host);
         }
         if tick.peer_committed {
             // ADR-0064(h): the peer's assemble applied on this unit; its
             // commit bytes drain through this unit's slot store, so both
             // units persist inside the one transaction.
-            if let Err(err) = persist_commit(host, store) {
+            if let Err(err) = commit_assembled(host, store, device) {
                 log::error!("peer commit persistence failed: {err}");
             }
         }

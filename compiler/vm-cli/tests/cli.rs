@@ -28,6 +28,7 @@ mod cli {
     mod serve_command;
     mod serve_device;
     mod serve_discovery;
+    mod serve_retained;
     mod serve_store;
     mod serve_tcp;
 }

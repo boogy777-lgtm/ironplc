@@ -603,6 +603,8 @@ fn identity_when_fresh_host_then_device_panel_and_live_status_snapshot() {
                 layout_hash: Some(layout_hash),
             },
             redundancy: None,
+            persisted_content_hash: None,
+            retained: None,
         }))
     );
 }

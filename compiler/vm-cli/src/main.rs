@@ -11,12 +11,16 @@ mod error;
 mod ha_pair;
 mod logger;
 mod pacer;
+mod retained_store;
 mod serve;
 #[cfg(test)]
 mod serve_device_tests;
 #[cfg(test)]
+mod serve_retained_tests;
+#[cfg(test)]
 mod serve_tests;
 mod slot_store;
+mod stored_item;
 mod tcp;
 
 #[cfg(test)]

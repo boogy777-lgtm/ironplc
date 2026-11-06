@@ -14,9 +14,11 @@
 //! setting is one row, its check and its line in the reference documentation,
 //! and nothing else.
 //!
-//! The values are text. A setting that is not text (a port, a switch) adds a
-//! type to the row when the first one arrives; nothing here knows where the
-//! device runs or what stores the values: [`device::Device`] persists them in
+//! The value of a row is text or a whole number ([`Check`]), and the JSON
+//! value must be of the type of the row. A new kind of value (a switch) adds a
+//! variant to [`Check`] and to [`SettingValue`], and the compiler lists every
+//! place that must handle it. Nothing here knows where the device runs or what
+//! stores the values: [`device::Device`] persists them in
 //! the file beside the served container, and a hardware target would persist
 //! them in its own way and reuse the rows.
 //!
@@ -49,6 +51,68 @@ enum Initial {
     /// 128 bits from the operating system's random source, as 32 lowercase
     /// hexadecimal digits: the device's own, and different on every device.
     Random128Hex,
+    /// The same whole number on every device.
+    Whole(u64),
+}
+
+/// The value of one setting, of the type its row declares.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum SettingValue {
+    /// Text, as the JSON string it was written as.
+    Text(String),
+    /// A whole number, zero or more, as the JSON number it was written as.
+    Whole(u64),
+}
+
+impl SettingValue {
+    /// The value as the file and the command carry it.
+    fn to_json(&self) -> Value {
+        match self {
+            SettingValue::Text(text) => Value::String(text.clone()),
+            SettingValue::Whole(number) => Value::from(*number),
+        }
+    }
+}
+
+impl fmt::Display for SettingValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SettingValue::Text(text) => f.write_str(text),
+            SettingValue::Whole(number) => write!(f, "{number}"),
+        }
+    }
+}
+
+/// The type of a row and the check its new values pass. Whether a new value is
+/// acceptable is decided here, so the type of the JSON value and the rule of
+/// the row cannot disagree.
+enum Check {
+    /// A JSON string; the reason when it is not acceptable.
+    Text(fn(&str) -> Result<(), &'static str>),
+    /// A JSON number that is a whole number, zero or more; the reason when it
+    /// is not acceptable.
+    Whole(fn(u64) -> Result<(), &'static str>),
+}
+
+impl Check {
+    /// The value `json` carries, when it has the type of the row and passes the
+    /// row's check; the reason when it does not.
+    fn accept(&self, json: &Value) -> Result<SettingValue, &'static str> {
+        match self {
+            Check::Text(check) => {
+                let text = json.as_str().ok_or("must be text")?;
+                check(text)?;
+                Ok(SettingValue::Text(text.to_owned()))
+            }
+            Check::Whole(check) => {
+                let number = json
+                    .as_u64()
+                    .ok_or("must be a whole number, zero or more")?;
+                check(number)?;
+                Ok(SettingValue::Whole(number))
+            }
+        }
+    }
 }
 
 /// Where a setting may be changed.
@@ -72,8 +136,8 @@ struct Row {
     initial: Initial,
     /// Where a new value may be given.
     changeable: Changeable,
-    /// Whether a new value is acceptable; the reason when it is not.
-    check: fn(&str) -> Result<(), &'static str>,
+    /// The type of the value, and whether a new value is acceptable.
+    check: Check,
 }
 
 /// The row of the `deviceId` setting: how a workstation recognises this device
@@ -85,7 +149,7 @@ const DEVICE_ID: Row = Row {
     key: "deviceId",
     initial: Initial::Random128Hex,
     changeable: Changeable::FileOnly,
-    check: check_device_id,
+    check: Check::Text(check_device_id),
 };
 
 /// The row of the `name` setting: the label the device presents.
@@ -93,8 +157,27 @@ const NAME: Row = Row {
     key: "name",
     initial: Initial::Fixed("ironplcvm"),
     changeable: Changeable::OnlineAndFile,
-    check: check_name,
+    check: Check::Text(check_name),
 };
+
+/// The row of the `retainedSavePeriod` setting: how often the device writes
+/// the retained values while it runs, in seconds. 0, the first value, writes
+/// them only at a controlled stop and when `assembleEdits` commits a new
+/// application (the CODESYS behaviour); a period adds a write every period in
+/// which the values changed. Changeable online, because a device in the field
+/// is tuned without a stop: the write wears the storage, and the operator
+/// trades that against the loss after a power failure.
+const RETAINED_SAVE_PERIOD: Row = Row {
+    key: "retainedSavePeriod",
+    initial: Initial::Whole(0),
+    changeable: Changeable::OnlineAndFile,
+    check: Check::Whole(check_retained_save_period),
+};
+
+/// The longest period of `retainedSavePeriod`, in seconds: one day. A longer
+/// period is a typing error, and the stop and the commit write the values
+/// anyway.
+const RETAINED_SAVE_PERIOD_MAX: u64 = 86_400;
 
 /// The longest device name, in characters.
 const NAME_MAX_CHARS: usize = 64;
@@ -112,6 +195,14 @@ fn check_name(value: &str) -> Result<(), &'static str> {
         Err("must have at most 64 characters")
     } else if value.chars().any(char::is_control) {
         Err("must not contain control characters")
+    } else {
+        Ok(())
+    }
+}
+
+fn check_retained_save_period(seconds: u64) -> Result<(), &'static str> {
+    if seconds > RETAINED_SAVE_PERIOD_MAX {
+        Err("must be at most 86400 seconds (one day)")
     } else {
         Ok(())
     }
@@ -146,6 +237,7 @@ macro_rules! settings {
 settings! {
     DeviceId => DEVICE_ID,
     Name => NAME,
+    RetainedSavePeriod => RETAINED_SAVE_PERIOD,
 }
 
 impl DeviceSetting {
@@ -209,13 +301,23 @@ pub(crate) fn os_random(buffer: &mut [u8]) -> Result<(), String> {
 /// and has passed the row's check.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct DeviceSettings {
-    values: [String; COUNT],
+    values: [SettingValue; COUNT],
 }
 
 impl DeviceSettings {
     /// The value of `setting`.
-    pub(crate) fn get(&self, setting: DeviceSetting) -> &str {
+    pub(crate) fn get(&self, setting: DeviceSetting) -> &SettingValue {
         &self.values[setting as usize]
+    }
+
+    /// How often the device writes the retained values while it runs, in
+    /// seconds; 0 is off. The check of the row keeps the value a whole number,
+    /// so the text arm is not reachable; it reads as off.
+    pub(crate) fn retained_save_period(&self) -> u64 {
+        match self.get(DeviceSetting::RetainedSavePeriod) {
+            SettingValue::Whole(seconds) => *seconds,
+            SettingValue::Text(_) => 0,
+        }
     }
 
     /// Builds the settings from `entries`, the content of a settings file.
@@ -233,7 +335,7 @@ impl DeviceSettings {
             values.push(value);
         }
         // The loop pushes one value for each of the COUNT rows.
-        let values = <[String; COUNT]>::try_from(values).map_err(|_| {
+        let values = <[SettingValue; COUNT]>::try_from(values).map_err(|_| {
             SettingsError::new(
                 None,
                 "the table of settings produced a wrong number of values",
@@ -261,12 +363,7 @@ impl DeviceSettings {
     pub(crate) fn entries(&self) -> Entries {
         DeviceSetting::ALL
             .iter()
-            .map(|setting| {
-                (
-                    setting.key().to_owned(),
-                    Value::String(self.get(*setting).to_owned()),
-                )
-            })
+            .map(|setting| (setting.key().to_owned(), self.get(*setting).to_json()))
             .collect()
     }
 
@@ -276,8 +373,8 @@ impl DeviceSettings {
     /// itself, so the two answers cannot disagree.
     pub(crate) fn identity(&self) -> DeviceIdentity {
         DeviceIdentity {
-            device_id: Some(self.get(DeviceSetting::DeviceId).to_owned()),
-            name: self.get(DeviceSetting::Name).to_owned(),
+            device_id: Some(self.get(DeviceSetting::DeviceId).to_string()),
+            name: self.get(DeviceSetting::Name).to_string(),
             model: "IronPLC SoftPLC".into(),
             modification: "vm-cli".into(),
             runtime_version: env!("CARGO_PKG_VERSION").to_string(),
@@ -302,24 +399,26 @@ fn refuse_file_only(entries: &Entries) -> Result<(), SettingsError> {
 }
 
 /// Checks every entry against its row and returns the accepted values by key.
-fn check_entries(entries: &Entries) -> Result<BTreeMap<&str, String>, SettingsError> {
+fn check_entries(entries: &Entries) -> Result<BTreeMap<&str, SettingValue>, SettingsError> {
     let mut checked = BTreeMap::new();
     for (key, value) in entries {
         let setting = DeviceSetting::from_key(key)
             .ok_or_else(|| SettingsError::new(Some(key), "is not a device setting"))?;
-        let text = value
-            .as_str()
-            .ok_or_else(|| SettingsError::new(Some(key), "must be text"))?;
-        (setting.row().check)(text).map_err(|reason| SettingsError::new(Some(key), reason))?;
-        checked.insert(key.as_str(), text.to_owned());
+        let accepted = setting
+            .row()
+            .check
+            .accept(value)
+            .map_err(|reason| SettingsError::new(Some(key), reason))?;
+        checked.insert(key.as_str(), accepted);
     }
     Ok(checked)
 }
 
-/// The first value of `setting`: its fixed text, or fresh random bits.
-fn first_value(setting: DeviceSetting, random: Random) -> Result<String, SettingsError> {
+/// The first value of `setting`: its fixed value, or fresh random bits.
+fn first_value(setting: DeviceSetting, random: Random) -> Result<SettingValue, SettingsError> {
     match setting.row().initial {
-        Initial::Fixed(text) => Ok(text.to_owned()),
+        Initial::Fixed(text) => Ok(SettingValue::Text(text.to_owned())),
+        Initial::Whole(number) => Ok(SettingValue::Whole(number)),
         Initial::Random128Hex => {
             let mut bytes = [0u8; DeviceId::LEN];
             random(&mut bytes).map_err(|err| {
@@ -328,7 +427,7 @@ fn first_value(setting: DeviceSetting, random: Random) -> Result<String, Setting
                     format!("could not be generated, the random source failed: {err}"),
                 )
             })?;
-            Ok(DeviceId::from_bytes(bytes).to_string())
+            Ok(SettingValue::Text(DeviceId::from_bytes(bytes).to_string()))
         }
     }
 }

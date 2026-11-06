@@ -21,18 +21,19 @@ fn counting(buffer: &mut [u8]) -> Result<(), String> {
 /// What the tests know about one row: a value it accepts that is not its first
 /// value, and a value it refuses. The match has no wildcard arm, so a new row
 /// does not compile until it has its samples.
-fn sample(setting: DeviceSetting) -> (&'static str, &'static str) {
+fn sample(setting: DeviceSetting) -> (Value, Value) {
     match setting {
         DeviceSetting::DeviceId => (
-            "ffffffffffffffffffffffffffffffff",
-            "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+            json!("ffffffffffffffffffffffffffffffff"),
+            json!("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"),
         ),
-        DeviceSetting::Name => ("cell 1 \u{00e4}", "   "),
+        DeviceSetting::Name => (json!("cell 1 \u{00e4}"), json!("   ")),
+        DeviceSetting::RetainedSavePeriod => (json!(30), json!(86_401)),
     }
 }
 
-fn entry(setting: DeviceSetting, value: &str) -> Entries {
-    Entries::from([(setting.key().to_string(), json!(value))])
+fn entry(setting: DeviceSetting, value: Value) -> Entries {
+    Entries::from([(setting.key().to_string(), value)])
 }
 
 fn first_settings() -> DeviceSettings {
@@ -70,10 +71,11 @@ fn resolve_when_no_entries_then_each_row_takes_its_first_value() {
     let settings = first_settings();
 
     assert_eq!(
-        settings.get(DeviceSetting::DeviceId),
+        settings.get(DeviceSetting::DeviceId).to_string(),
         "0102030405060708090a0b0c0d0e0f10"
     );
-    assert_eq!(settings.get(DeviceSetting::Name), "ironplcvm");
+    assert_eq!(settings.get(DeviceSetting::Name).to_string(), "ironplcvm");
+    assert_eq!(settings.retained_save_period(), 0);
 }
 
 #[test]
@@ -85,7 +87,7 @@ fn resolve_when_os_random_twice_then_the_ids_differ_and_pass_the_check() {
         first.get(DeviceSetting::DeviceId),
         second.get(DeviceSetting::DeviceId)
     );
-    assert!(check_device_id(first.get(DeviceSetting::DeviceId)).is_ok());
+    assert!(check_device_id(&first.get(DeviceSetting::DeviceId).to_string()).is_ok());
 }
 
 #[test]
@@ -106,7 +108,7 @@ fn every_row_when_first_value_then_passes_its_own_check() {
 
     for setting in DeviceSetting::ALL {
         assert!(
-            check_entries(&entry(*setting, settings.get(*setting))).is_ok(),
+            check_entries(&entry(*setting, settings.get(*setting).to_json())).is_ok(),
             "{}",
             setting.key()
         );
@@ -118,9 +120,10 @@ fn resolve_when_a_row_has_a_valid_value_then_the_value_is_kept() {
     for setting in DeviceSetting::ALL {
         let (valid, _) = sample(*setting);
 
-        let settings = DeviceSettings::resolve(&entry(*setting, valid), &mut counting).unwrap();
+        let settings =
+            DeviceSettings::resolve(&entry(*setting, valid.clone()), &mut counting).unwrap();
 
-        assert_eq!(settings.get(*setting), valid);
+        assert_eq!(settings.get(*setting).to_json(), valid);
     }
 }
 
@@ -146,9 +149,11 @@ fn apply_online_when_an_online_row_has_a_valid_value_then_only_that_row_changes(
         let mut settings = first_settings();
         let before = settings.clone();
 
-        settings.apply_online(&entry(*setting, valid)).unwrap();
+        settings
+            .apply_online(&entry(*setting, valid.clone()))
+            .unwrap();
 
-        assert_eq!(settings.get(*setting), valid);
+        assert_eq!(settings.get(*setting).to_json(), valid);
         for other in DeviceSetting::ALL.iter().filter(|other| *other != setting) {
             assert_eq!(settings.get(*other), before.get(*other));
         }
@@ -203,9 +208,10 @@ fn resolve_when_a_file_only_row_has_a_valid_value_then_the_value_is_kept() {
     for setting in file_only_rows() {
         let (valid, _) = sample(*setting);
 
-        let settings = DeviceSettings::resolve(&entry(*setting, valid), &mut counting).unwrap();
+        let settings =
+            DeviceSettings::resolve(&entry(*setting, valid.clone()), &mut counting).unwrap();
 
-        assert_eq!(settings.get(*setting), valid);
+        assert_eq!(settings.get(*setting).to_json(), valid);
     }
 }
 
@@ -246,6 +252,11 @@ fn apply_online_when_one_entry_is_invalid_then_no_entry_is_applied() {
 #[case::number("name", json!(5), "the field \"name\" must be text")]
 #[case::null("name", json!(null), "the field \"name\" must be text")]
 #[case::empty_name("name", json!(""), "the field \"name\" must not be empty")]
+#[case::negative_period("retainedSavePeriod", json!(-1), "the field \"retainedSavePeriod\" must be a whole number, zero or more")]
+#[case::fractional_period("retainedSavePeriod", json!(1.5), "the field \"retainedSavePeriod\" must be a whole number, zero or more")]
+#[case::quoted_period("retainedSavePeriod", json!("60"), "the field \"retainedSavePeriod\" must be a whole number, zero or more")]
+#[case::null_period("retainedSavePeriod", json!(null), "the field \"retainedSavePeriod\" must be a whole number, zero or more")]
+#[case::too_long_period("retainedSavePeriod", json!(86_401), "the field \"retainedSavePeriod\" must be at most 86400 seconds (one day)")]
 #[case::long_name(
     "name",
     json!("n".repeat(65)),
@@ -283,11 +294,12 @@ fn name_when_64_characters_of_two_bytes_then_accepted() {
 }
 
 #[test]
-fn entries_when_settings_then_one_text_entry_for_each_row() {
+fn entries_when_settings_then_one_entry_for_each_row() {
     let entries = first_settings().entries();
 
     assert_eq!(entries.len(), DeviceSetting::ALL.len());
     assert_eq!(entries["name"], json!("ironplcvm"));
+    assert_eq!(entries["retainedSavePeriod"], json!(0));
     assert_eq!(
         entries["deviceId"],
         json!("0102030405060708090a0b0c0d0e0f10")
@@ -298,7 +310,7 @@ fn entries_when_settings_then_one_text_entry_for_each_row() {
 fn identity_when_settings_then_carries_the_id_the_name_and_the_build_constants() {
     let mut settings = first_settings();
     settings
-        .apply_online(&entry(DeviceSetting::Name, "cell 1"))
+        .apply_online(&entry(DeviceSetting::Name, json!("cell 1")))
         .unwrap();
 
     let identity = settings.identity();
@@ -327,4 +339,24 @@ fn check_device_id_when_not_32_lowercase_hex_digits_then_the_reason(#[case] id: 
 #[test]
 fn check_device_id_when_32_lowercase_hex_digits_then_ok() {
     assert_eq!(check_device_id("0102030405060708090a0b0c0d0e0f10"), Ok(()));
+}
+
+#[test]
+fn retained_save_period_when_set_online_then_the_seconds_are_read_back() {
+    let mut settings = first_settings();
+
+    settings
+        .apply_online(&entry(DeviceSetting::RetainedSavePeriod, json!(90)))
+        .unwrap();
+
+    assert_eq!(settings.retained_save_period(), 90);
+}
+
+#[test]
+fn check_retained_save_period_when_one_day_then_ok_and_when_longer_then_the_reason() {
+    assert_eq!(check_retained_save_period(86_400), Ok(()));
+    assert_eq!(
+        check_retained_save_period(86_401),
+        Err("must be at most 86400 seconds (one day)")
+    );
 }

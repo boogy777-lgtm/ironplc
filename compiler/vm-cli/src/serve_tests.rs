@@ -39,7 +39,7 @@ END_PROGRAM
 /// container through the wire format, mirroring
 /// `tests/cli.rs::write_compiled_container` and the runtime test fixtures,
 /// so `header.layout_hash` is the value a deployed artifact carries.
-fn compile_container(source: &str) -> Container {
+pub(crate) fn compile_container(source: &str) -> Container {
     let options = ironplc_parser::options::CompilerOptions::default();
     let library =
         ironplc_parser::parse_program(source, &ironplc_dsl::core::FileId::default(), &options)

@@ -1,0 +1,47 @@
+=====
+V6018
+=====
+
+.. problem-summary:: V6018
+
+``ironplcvm serve`` could not write the retained file
+``<FILE>.retained`` beside the served container. The file holds the values of
+the ``RETAIN`` and ``PERSISTENT`` variables, so that the device can restore them
+after a restart. The device writes the file when :program:`ironplcvm serve` stops
+at the end of its input, when ``assembleEdits`` commits a new application, and, when the ``retainedSavePeriod`` device setting
+is on, every period in which the values changed. Each write is a temporary file
+``<FILE>.retained.tmp`` renamed over the retained file, so a failed write leaves
+the file as it was.
+
+The device keeps running. What happens next depends on where the write failed:
+
+- At ``assembleEdits``, the session answers this error instead of the
+  acknowledgment, as it answers :doc:`V6012 <V6012>` when the slot store fails.
+  The new application is running and, when the slot store succeeded, committed;
+  only its retained values are not on the disk yet.
+- At a periodic write, and when :program:`ironplcvm serve` stops, the device logs
+  this error. The values that were last written stay on the disk. At the next
+  start, the device applies them only when they belong to the application it
+  boots, and reports in ``identity`` whether it did.
+
+Typical causes: the directory of the served container is read-only or full, or a
+directory has the name of the retained file or of its temporary file
+``<FILE>.retained.tmp``.
+
+Solutions
+---------
+
+1. Check the directory beside the served container: free disk space, restore
+   write permissions, and remove any directory that has the name of the retained
+   file or of its temporary file.
+2. Send the failed command again, or wait for the next period, after the cause is
+   removed. The device writes the current values at the next opportunity.
+3. Check the ``retained`` field of the ``identity`` answer after a restart. The
+   value ``discarded`` names why the device did not apply the file.
+
+See Also
+--------
+
+- :doc:`/reference/runtime/problems/V6012` --- the slot store cannot persist an assembled commit
+- :doc:`/reference/runtime/problems/V6016` --- the device settings file cannot be written
+- :doc:`/reference/language/variables/retention` --- which variables survive a restart

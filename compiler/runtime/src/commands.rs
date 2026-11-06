@@ -321,6 +321,40 @@ pub struct IdentityPayload {
     /// The redundancy block; absent on the wire when standalone.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub redundancy: Option<RedundancyIdentity>,
+    /// The `contentHash` of the application the device would boot, as
+    /// lowercase hexadecimal: the newest committed generation in the device's
+    /// storage. It equals `application.contentHash` until a commit is live
+    /// and not durable (`assembleEdits` answered V6012); then the device runs
+    /// the new application and would boot the old one. Absent from a device
+    /// that stores nothing (the MCP in-process host) and from a device that
+    /// predates the field; a client ignores what it does not know.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub persisted_content_hash: Option<String>,
+    /// What the device did with its stored retained image at boot (ADR-0085):
+    /// applied, discarded with a reason, or none stored. Absent from a device
+    /// that keeps no retained image.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retained: Option<BootNote>,
+}
+
+/// What a device did at boot with one item it keeps across a restart: the
+/// shape of every such item, so that a new stored item adds a field of this
+/// type to [`IdentityPayload`] and nothing else.
+///
+/// `result` is `"applied"` (the stored item belonged to the booting
+/// application and was used), `"absent"` (nothing was stored) or `"discarded"`
+/// (an item was stored and not used; `reason` says why, for instance
+/// `"damaged"`, `"otherApplication"` or `"otherRetainedLayout"`). A discarded
+/// item is reported, never applied and never silent.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BootNote {
+    /// `"applied"`, `"absent"` or `"discarded"`.
+    pub result: String,
+    /// Why the item was discarded; present exactly when `result` is
+    /// `"discarded"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }
 
 /// The answer to one [`Command`].
@@ -481,6 +515,8 @@ pub fn execute(command: Command, host: &mut RuntimeHost, device: &DeviceIdentity
             device: device.clone(),
             application: StatusPayload::from(host.status()),
             redundancy: None,
+            persisted_content_hash: None,
+            retained: None,
         })),
         Command::GetStatus => Response::Status(StatusPayload::from(host.status())),
         Command::AcceptEdits {
