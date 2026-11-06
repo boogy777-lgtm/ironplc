@@ -293,6 +293,8 @@ connection parameters, connected-device panel, status bar):
     exits) driving the existing session commands with the ADR-0064 edit
     identity and mandatory Test; phases compiling → uploading → verifying →
     running render on the device panel.
+    Replaced by the online edit dialog (`ironplc.onlineEdit`), whose Finalize
+    all is the finalize-equivalent and whose Cancel is the exit.
 
 - **Frontend dependency:** format-preserving editing and shared semantic
   analysis use the approved CST/query architecture in Phase 8 below.

@@ -1,7 +1,7 @@
 /**
- * Runs the item the person selected in the online-edit dialog (stage 6 of the
- * online model). The model (`onlineEditLogic`) says what an item sends; this
- * module sends it, and decides nothing else.
+ * Runs the item the person selected in the online-edit dialog. The model
+ * (`onlineEditLogic`) says what an item sends; this module sends it, and
+ * decides nothing else.
  *
  * The invariants of every run:
  * - the commands are the item's: one command, or the steps the view names for

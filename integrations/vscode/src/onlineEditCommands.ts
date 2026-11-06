@@ -1,7 +1,6 @@
 /**
- * The online-edit dialog (stage 6 of the online model): `ironplc.onlineEdit`
- * opens a QuickPick that stays open through all stages of an edit. This module
- * is glue: it sets the widget properties from `dialogModel`, runs the item the
+ * The online-edit dialog: `ironplc.onlineEdit` opens a QuickPick that stays
+ * open through all stages of an edit. This module is glue: it sets the widget properties from `dialogModel`, runs the item the
  * person selects with `runItem`, and renders what the device reports. The
  * model and the runner decide everything else and are unit-tested without
  * `vscode`.

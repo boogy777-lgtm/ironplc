@@ -1,7 +1,6 @@
 /**
- * The online-edit dialog as a model (stage 6 of the online model): what the
- * QuickPick shows for the edit view of the device and the one fact the client
- * holds about Build. The shell sets the widget properties from the model and
+ * The online-edit dialog as a model: what the QuickPick shows for the edit view
+ * of the device and the one fact the client holds about Build. The shell sets the widget properties from the model and
  * runs the command of the item the person selects; nothing here imports `vscode`.
  *
  * The invariants of every rendering of the edit view:
