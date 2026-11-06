@@ -77,6 +77,76 @@ export interface EditIdentity {
   origin?: string;
 }
 
+/**
+ * How an accepted candidate takes over the running application (ADR-0088): the
+ * optional `mode` of `acceptEdits`. `change` is the default and is absent from
+ * the line; `replace` is a Download. `migrate` is not a mode a client chooses:
+ * the device selects it inside `change`.
+ */
+export type AcceptMode = 'change' | 'replace';
+
+/** How the staged candidate takes over, as the status reports it (`candidateMode`). */
+export type CandidateMode = AcceptMode | 'migrate';
+
+/**
+ * Why a `PERSISTENT` variable is re-initialised by a replace (ADR-0088), the
+ * `reason` of an entry of the `accepted` answer.
+ */
+export type ReinitReason
+  = | 'noStableId'
+    | 'notInCandidate'
+    | 'qualifierChanged'
+    | 'typeChanged'
+    | 'unsupportedType';
+
+/** One `PERSISTENT` variable that a replace re-initialises: which one, and why. */
+export interface Reinitialised {
+  /** The stable variable ID, when the running application has one. */
+  uid?: number;
+  /** The variable's name, when the device knows it. */
+  name?: string;
+  reason: ReinitReason;
+}
+
+/** A refusal reason of the edit view (ADR-0087): the V-code and its text. */
+export interface EditReason {
+  code: string;
+  text: string;
+}
+
+/** One command of the edit view: whether the device accepts it now, and why not. */
+export interface EditCommandView {
+  enabled: boolean;
+  label: string;
+  /** Present when `enabled` is false. */
+  reason?: EditReason;
+  /**
+   * The commands that make this one up: what the device runs for a command
+   * (Cancel under Test), or what the client runs for `finalizeAll`.
+   */
+  steps?: readonly string[];
+}
+
+/**
+ * The edit view of a status (ADR-0087): which edit commands the device allows
+ * now, decided by the device from its own transition table. A client shows it
+ * and computes no enablement. The keys of `commands` are the wire names of the
+ * edit commands and `finalizeAll`; a command a later device adds is one more key.
+ */
+export interface EditView {
+  /**
+   * Where the edit stands: `idle`, `accepted`, `testing`, `testingMigration`,
+   * `testingReplace` or `swapPending`. A stage a client does not know is read
+   * through `commands` and `next`, which are the contract.
+   */
+  stage: string;
+  commands: Readonly<Record<string, EditCommandView>>;
+  /** The command that moves the edit one stage on; absent while a swap is pending. */
+  next?: { command: string; label: string };
+  /** What the engineer should know about the edit as it stands. */
+  warning?: string;
+}
+
 /** A snapshot of the host's hot-edit state (the `status` response payload). */
 export interface HotEditStatus {
   mode: string;
@@ -97,6 +167,16 @@ export interface HotEditStatus {
   contentHash?: string;
   /** The `layout_hash` of the normal artifact, under the same rules as `contentHash`. */
   layoutHash?: string;
+  /**
+   * How the staged candidate takes over the state (ADR-0088). Absent when no
+   * candidate is staged and from a device that predates the field.
+   */
+  candidateMode?: CandidateMode;
+  /**
+   * Which edit commands the device allows now (ADR-0087). Absent from a device
+   * that predates the field: a client then has no view to follow.
+   */
+  edit?: EditView;
 }
 
 /** The baseline block of the pending-edit record (the normal artifact at Accept). */
@@ -205,6 +285,18 @@ export class HotEditProtocolError extends Error {
 }
 
 /**
+ * A device answered an accept in the `replace` mode as it answers an ordinary
+ * accept: it does not know the mode, and the candidate it staged is a change.
+ * The caller discards that candidate.
+ */
+export class ReplaceNotSupportedError extends HotEditProtocolError {
+  constructor() {
+    super(null, 'the device does not support a Download: it answered the accept as an ordinary edit');
+    this.name = 'ReplaceNotSupportedError';
+  }
+}
+
+/**
  * Renders one command as a single line of JSON, without a trailing newline.
  * The `acceptEdits` line carries the program bytes and, when non-empty, the
  * ADR-0061 migration decision map and the ADR-0064 edit identity.
@@ -214,9 +306,14 @@ export function encodeRequest(
   program?: Uint8Array,
   migration?: MigrationDecisionMap,
   edit?: EditIdentity,
+  mode: AcceptMode = 'change',
 ): string {
   if (command === 'acceptEdits') {
     const request: Record<string, unknown> = { command, program: Array.from(program ?? []) };
+    // The default mode is absent from the line, as the device writes it.
+    if (mode !== 'change') {
+      request.mode = mode;
+    }
     if (edit && (edit.name !== undefined || edit.origin !== undefined)) {
       request.edit = edit;
     }
@@ -231,11 +328,18 @@ export function encodeRequest(
 type StatusResponse = { kind: 'status'; status: HotEditStatus };
 type IdentityResponse = { kind: 'identity'; identity: IdentityInfo };
 type AckResponse = { kind: 'ack' };
+type AcceptedResponse = { kind: 'accepted'; reinitialised: Reinitialised[] };
 type RunStateResponse = { kind: 'runState'; runState: RunState };
 type ErrorResponse = { kind: 'error'; error: HotEditProtocolError };
 
 /** The parsed answer to one command, before command-specific matching. */
-export type HotEditResponse = StatusResponse | IdentityResponse | AckResponse | RunStateResponse | ErrorResponse;
+export type HotEditResponse
+  = | StatusResponse
+    | IdentityResponse
+    | AckResponse
+    | AcceptedResponse
+    | RunStateResponse
+    | ErrorResponse;
 
 /**
  * Parses one response line (a single JSON value without its trailing
@@ -264,6 +368,9 @@ export function parseResponseLine(line: string): HotEditResponse {
   }
   if (record.response === 'ack') {
     return { kind: 'ack' };
+  }
+  if (record.response === 'accepted') {
+    return { kind: 'accepted', reinitialised: parseReinitialised(record.reinitialised) };
   }
   if (record.response === 'runState') {
     const runState = parseRunState(record.runState);
@@ -316,12 +423,118 @@ function parsePair(value: unknown): TypeChangePair {
   return { uid, name: name ?? null, from, to, sizeEqual };
 }
 
+/**
+ * Builds the list of an `accepted` answer. The list is always present on the
+ * wire (empty when every variable is kept); a reason this client does not know
+ * is kept as it is, so a later device's reason is shown and not hidden.
+ */
+function parseReinitialised(value: unknown): Reinitialised[] {
+  if (!Array.isArray(value)) {
+    throw new HotEditProtocolError(null, 'accepted response is missing the reinitialised list');
+  }
+  return value.map((entry: unknown): Reinitialised => {
+    if (typeof entry !== 'object' || entry === null) {
+      throw new HotEditProtocolError(null, 'accepted response carries a malformed reinitialised entry');
+    }
+    const { uid, name, reason } = entry as Record<string, unknown>;
+    if (
+      typeof reason !== 'string'
+      || (uid !== undefined && (typeof uid !== 'number' || !Number.isInteger(uid) || uid < 0))
+      || (name !== undefined && typeof name !== 'string')
+    ) {
+      throw new HotEditProtocolError(null, 'accepted response carries a malformed reinitialised entry');
+    }
+    return {
+      ...(uid !== undefined ? { uid: uid as number } : {}),
+      ...(name !== undefined ? { name: name as string } : {}),
+      reason: reason as ReinitReason,
+    };
+  });
+}
+
+/** Reads the optional `candidateMode` of a status payload; a mode this client does not know is refused. */
+function parseCandidateMode(value: unknown): CandidateMode | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (value !== 'change' && value !== 'migrate' && value !== 'replace') {
+    throw new HotEditProtocolError(null, 'status response carries a malformed candidateMode');
+  }
+  return value;
+}
+
+/** Reads one command of the edit view. */
+function parseEditCommand(value: unknown): EditCommandView {
+  if (typeof value !== 'object' || value === null) {
+    throw new HotEditProtocolError(null, 'status response carries a malformed edit command');
+  }
+  const { enabled, label, reason, steps } = value as Record<string, unknown>;
+  if (typeof enabled !== 'boolean' || typeof label !== 'string') {
+    throw new HotEditProtocolError(null, 'status response carries a malformed edit command');
+  }
+  let parsedReason: EditReason | undefined;
+  if (reason !== undefined && reason !== null) {
+    const { code, text } = reason as Record<string, unknown>;
+    if (typeof code !== 'string' || typeof text !== 'string') {
+      throw new HotEditProtocolError(null, 'status response carries a malformed edit reason');
+    }
+    parsedReason = { code, text };
+  }
+  if (steps !== undefined && (!Array.isArray(steps) || !steps.every(step => typeof step === 'string'))) {
+    throw new HotEditProtocolError(null, 'status response carries a malformed edit command');
+  }
+  return {
+    enabled,
+    label,
+    ...(parsedReason !== undefined ? { reason: parsedReason } : {}),
+    ...(steps !== undefined ? { steps: steps as string[] } : {}),
+  };
+}
+
+/**
+ * Reads the optional `edit` view of a status payload (ADR-0087). Absent means
+ * a device that predates it. The stage and the command names are not checked
+ * against a list: the view grows by a row, and a client reads what is there.
+ */
+function parseEditView(value: unknown): EditView | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== 'object') {
+    throw new HotEditProtocolError(null, 'status response carries a malformed edit view');
+  }
+  const { stage, commands, next, warning } = value as Record<string, unknown>;
+  if (typeof stage !== 'string' || typeof commands !== 'object' || commands === null) {
+    throw new HotEditProtocolError(null, 'status response carries a malformed edit view');
+  }
+  const parsed: Record<string, EditCommandView> = {};
+  for (const [name, command] of Object.entries(commands)) {
+    parsed[name] = parseEditCommand(command);
+  }
+  let parsedNext: { command: string; label: string } | undefined;
+  if (next !== undefined && next !== null) {
+    const { command, label } = next as Record<string, unknown>;
+    if (typeof command !== 'string' || typeof label !== 'string') {
+      throw new HotEditProtocolError(null, 'status response carries a malformed edit view');
+    }
+    parsedNext = { command, label };
+  }
+  return {
+    stage,
+    commands: parsed,
+    ...(parsedNext !== undefined ? { next: parsedNext } : {}),
+    ...(typeof warning === 'string' ? { warning } : {}),
+  };
+}
+
 /** Builds a [`HotEditStatus`] from a parsed `status` response object. */
 function parseStatus(record: Record<string, unknown>): HotEditStatus {
   if (typeof record.mode !== 'string') {
     throw new HotEditProtocolError(null, 'status response is missing the mode');
   }
   const pendingEdit = parsePendingEdit(record.pendingEdit);
+  const candidateMode = parseCandidateMode(record.candidateMode);
+  const editView = parseEditView(record.edit);
   const contentHash = parseHashField(record, 'contentHash');
   const layoutHash = parseHashField(record, 'layoutHash');
   return {
@@ -335,6 +548,8 @@ function parseStatus(record: Record<string, unknown>): HotEditStatus {
     ...(pendingEdit !== undefined ? { pendingEdit } : {}),
     ...(contentHash !== undefined ? { contentHash } : {}),
     ...(layoutHash !== undefined ? { layoutHash } : {}),
+    ...(candidateMode !== undefined ? { candidateMode } : {}),
+    ...(editView !== undefined ? { edit: editView } : {}),
   };
 }
 
@@ -612,6 +827,22 @@ export class HotEditSession {
     await this.request('acceptEdits', program, migration, edit);
   }
 
+  /**
+   * Stages the compiled container `program` in the `replace` mode (ADR-0088): a
+   * Download. The answer lists the `PERSISTENT` variables that will be
+   * re-initialised, empty when every one is kept. A device that does not know
+   * the mode answers like an ordinary accept and has staged a change candidate
+   * then, so the answer is [`ReplaceNotSupportedError`] and the caller discards
+   * the candidate.
+   */
+  async acceptReplace(program: Uint8Array, edit?: EditIdentity): Promise<Reinitialised[]> {
+    const response = await this.request('acceptEdits', program, undefined, edit, 'replace');
+    if (response.kind !== 'accepted') {
+      throw new ReplaceNotSupportedError();
+    }
+    return response.reinitialised;
+  }
+
   /** Activates the staged candidate at the next scan boundary. */
   async testEdits(): Promise<void> {
     await this.request('testEdits');
@@ -756,8 +987,9 @@ export class HotEditSession {
     program?: Uint8Array,
     migration?: MigrationDecisionMap,
     edit?: EditIdentity,
+    mode?: AcceptMode,
   ): Promise<HotEditResponse> {
-    const line = await this.channel.request(encodeRequest(command, program, migration, edit));
+    const line = await this.channel.request(encodeRequest(command, program, migration, edit, mode));
     let parsed: HotEditResponse;
     try {
       parsed = parseResponseLine(line);

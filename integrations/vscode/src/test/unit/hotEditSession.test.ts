@@ -9,6 +9,7 @@ import {
   HotEditStatus,
   HotEditTransport,
   parseResponseLine,
+  ReplaceNotSupportedError,
   runStateOf,
 } from '../../hotEditSession';
 import { SUPPORTED_SESSION_PROTOCOL } from '../../sessionConstants';
@@ -969,6 +970,210 @@ suite('Run and Stop wire mirror', () => {
     transport.emitLine('{"response":"ack"}');
 
     await assert.rejects(request, /unexpected ack response to startScan/);
+  });
+});
+
+const EDIT_VIEW_TESTING_REPLACE = '{"commands":{"accept":{"enabled":false,"label":"Accept","reason":{"code":"V4013","text":"a candidate is already staged"}},"assemble":{"enabled":true,"label":"Assemble"},"cancel":{"enabled":false,"label":"Cancel","reason":{"code":"V4011","text":"untest and cancel are not supported after a schema-changing test; assemble instead"}},"finalizeAll":{"enabled":false,"label":"Finalize all","reason":{"code":"V4013","text":"a candidate is already staged"},"steps":["accept","test","assemble"]},"test":{"enabled":false,"label":"Test","reason":{"code":"V4015","text":"operation not allowed in the current hot-edit phase"}},"untest":{"enabled":false,"label":"Untest","reason":{"code":"V4011","text":"untest and cancel are not supported after a schema-changing test; assemble instead"}}},"next":{"command":"assemble","label":"Assemble"},"stage":"testingReplace","warning":"a restart of the device loses this candidate"}';
+
+suite('the replace mode of the accept', () => {
+  test('encodeRequest_when_replace_then_the_line_carries_the_mode', () => {
+    assert.strictEqual(
+      encodeRequest('acceptEdits', new Uint8Array([1]), undefined, undefined, 'replace'),
+      '{"command":"acceptEdits","program":[1],"mode":"replace"}',
+    );
+  });
+
+  test('encodeRequest_when_change_then_the_mode_is_absent_as_the_device_writes_it', () => {
+    assert.strictEqual(
+      encodeRequest('acceptEdits', new Uint8Array([1]), undefined, undefined, 'change'),
+      '{"command":"acceptEdits","program":[1]}',
+    );
+  });
+
+  test('encodeRequest_when_replace_with_edit_then_mode_and_edit_are_both_carried', () => {
+    assert.strictEqual(
+      encodeRequest('acceptEdits', new Uint8Array([1]), undefined, { name: 'main.st' }, 'replace'),
+      '{"command":"acceptEdits","program":[1],"mode":"replace","edit":{"name":"main.st"}}',
+    );
+  });
+
+  test('parseResponseLine_when_accepted_then_the_reinitialised_list', () => {
+    const response = parseResponseLine('{"response":"accepted","reinitialised":[{"uid":2,"name":"Retyped","reason":"typeChanged"},{"uid":3,"reason":"notInCandidate"},{"reason":"noStableId"}]}');
+
+    assert.deepStrictEqual(response, {
+      kind: 'accepted',
+      reinitialised: [
+        { uid: 2, name: 'Retyped', reason: 'typeChanged' },
+        { uid: 3, reason: 'notInCandidate' },
+        { reason: 'noStableId' },
+      ],
+    });
+  });
+
+  test('parseResponseLine_when_accepted_with_nothing_reinitialised_then_empty_list', () => {
+    assert.deepStrictEqual(
+      parseResponseLine('{"response":"accepted","reinitialised":[]}'),
+      { kind: 'accepted', reinitialised: [] },
+    );
+  });
+
+  test('parseResponseLine_when_accepted_has_a_reason_of_a_later_device_then_it_is_kept', () => {
+    const response = parseResponseLine('{"response":"accepted","reinitialised":[{"reason":"somethingNew"}]}');
+
+    assert.strictEqual(response.kind, 'accepted');
+    if (response.kind === 'accepted') {
+      assert.strictEqual(response.reinitialised[0].reason, 'somethingNew' as never);
+    }
+  });
+
+  test('parseResponseLine_when_accepted_is_malformed_then_throws', () => {
+    for (const line of [
+      '{"response":"accepted"}',
+      '{"response":"accepted","reinitialised":{}}',
+      '{"response":"accepted","reinitialised":[1]}',
+      '{"response":"accepted","reinitialised":[{"uid":-1,"reason":"typeChanged"}]}',
+      '{"response":"accepted","reinitialised":[{"uid":"2","reason":"typeChanged"}]}',
+      '{"response":"accepted","reinitialised":[{"name":3,"reason":"typeChanged"}]}',
+      '{"response":"accepted","reinitialised":[{"uid":2}]}',
+    ]) {
+      assert.throws(() => parseResponseLine(line), HotEditProtocolError, line);
+    }
+  });
+
+  test('acceptReplace_when_accepted_then_sends_the_mode_and_returns_the_list', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.acceptReplace(new Uint8Array([9, 8]), { name: 'main.st', origin: 'ironplc-vscode' });
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine('{"response":"accepted","reinitialised":[{"reason":"noStableId"}]}');
+
+    const list = await request;
+
+    assert.deepStrictEqual(list, [{ reason: 'noStableId' }]);
+    assert.strictEqual(
+      transport.sent[0],
+      '{"command":"acceptEdits","program":[9,8],"mode":"replace","edit":{"name":"main.st","origin":"ironplc-vscode"}}',
+    );
+  });
+
+  test('acceptReplace_when_device_answers_ack_then_replace_not_supported', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.acceptReplace(new Uint8Array([1]));
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine('{"response":"ack"}');
+
+    await assert.rejects(request, (err: unknown) => err instanceof ReplaceNotSupportedError && err.vCode === null);
+  });
+
+  test('acceptReplace_when_refused_then_the_coded_error', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.acceptReplace(new Uint8Array([1]));
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine('{"response":"error","vCode":"V4013","message":"a candidate is already staged"}');
+
+    await assert.rejects(request, (err: unknown) => err instanceof HotEditProtocolError && err.vCode === 'V4013');
+  });
+
+  test('acceptEdits_when_default_mode_then_the_line_is_unchanged', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.acceptEdits(new Uint8Array([9]));
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine('{"response":"ack"}');
+
+    await request;
+
+    assert.strictEqual(transport.sent[0], '{"command":"acceptEdits","program":[9]}');
+  });
+});
+
+suite('the candidate mode and the edit view of a status', () => {
+  test('parseResponseLine_when_status_has_neither_then_both_absent', () => {
+    const response = parseResponseLine(STATUS_LINE);
+
+    assert.strictEqual(response.kind, 'status');
+    if (response.kind === 'status') {
+      assert.ok(!('candidateMode' in response.status));
+      assert.ok(!('edit' in response.status));
+    }
+  });
+
+  test('parseResponseLine_when_status_has_candidate_mode_then_read', () => {
+    for (const mode of ['change', 'migrate', 'replace']) {
+      const response = parseResponseLine(STATUS_LINE.slice(0, -1) + `,"candidateMode":"${mode}"}`);
+
+      assert.strictEqual(response.kind === 'status' && response.status.candidateMode, mode);
+    }
+  });
+
+  test('parseResponseLine_when_candidate_mode_is_unknown_then_throws', () => {
+    assert.throws(
+      () => parseResponseLine(STATUS_LINE.slice(0, -1) + ',"candidateMode":"teleport"}'),
+      HotEditProtocolError,
+    );
+  });
+
+  test('parseResponseLine_when_status_has_the_edit_view_of_a_replace_under_test_then_every_part_is_read', () => {
+    const response = parseResponseLine(STATUS_LINE.slice(0, -1) + `,"candidateMode":"replace","edit":${EDIT_VIEW_TESTING_REPLACE}}`);
+
+    assert.strictEqual(response.kind, 'status');
+    if (response.kind === 'status') {
+      const edit = response.status.edit;
+      assert.ok(edit !== undefined);
+      assert.strictEqual(edit.stage, 'testingReplace');
+      assert.deepStrictEqual(edit.next, { command: 'assemble', label: 'Assemble' });
+      assert.strictEqual(edit.warning, 'a restart of the device loses this candidate');
+      assert.strictEqual(edit.commands.assemble.enabled, true);
+      assert.strictEqual(edit.commands.assemble.reason, undefined);
+      assert.deepStrictEqual(edit.commands.cancel.reason, {
+        code: 'V4011',
+        text: 'untest and cancel are not supported after a schema-changing test; assemble instead',
+      });
+      assert.deepStrictEqual(edit.commands.finalizeAll.steps, ['accept', 'test', 'assemble']);
+      assert.deepStrictEqual(Object.keys(edit.commands).sort(), ['accept', 'assemble', 'cancel', 'finalizeAll', 'test', 'untest']);
+    }
+  });
+
+  test('parseResponseLine_when_identity_application_has_the_edit_view_then_it_is_read', () => {
+    const line = IDENTITY_LINE.replace('"rounds":0}}', `"rounds":0,"edit":${EDIT_VIEW_TESTING_REPLACE}}}`);
+
+    const response = parseResponseLine(line);
+
+    assert.strictEqual(response.kind === 'identity' && response.identity.application.edit?.stage, 'testingReplace');
+  });
+
+  test('parseResponseLine_when_edit_view_has_a_stage_and_a_command_of_a_later_device_then_both_are_read', () => {
+    const view = '{"stage":"somethingNew","commands":{"reset":{"enabled":true,"label":"Reset"}}}';
+
+    const response = parseResponseLine(STATUS_LINE.slice(0, -1) + `,"edit":${view}}`);
+
+    assert.strictEqual(response.kind, 'status');
+    if (response.kind === 'status') {
+      assert.strictEqual(response.status.edit?.stage, 'somethingNew');
+      assert.strictEqual(response.status.edit?.commands.reset.label, 'Reset');
+      assert.strictEqual(response.status.edit?.next, undefined);
+    }
+  });
+
+  test('parseResponseLine_when_edit_view_is_malformed_then_throws', () => {
+    for (const view of [
+      '"idle"',
+      '{"commands":{}}',
+      '{"stage":"idle"}',
+      '{"stage":"idle","commands":{"test":{"enabled":"yes","label":"Test"}}}',
+      '{"stage":"idle","commands":{"test":{"enabled":true}}}',
+      '{"stage":"idle","commands":{"test":{"enabled":false,"label":"Test","reason":{"code":4}}}}',
+      '{"stage":"idle","commands":{"test":{"enabled":true,"label":"Test","steps":[1]}}}',
+      '{"stage":"idle","commands":{},"next":{"command":"test"}}',
+    ]) {
+      assert.throws(
+        () => parseResponseLine(STATUS_LINE.slice(0, -1) + `,"edit":${view}}`),
+        HotEditProtocolError,
+        view,
+      );
+    }
   });
 });
 
