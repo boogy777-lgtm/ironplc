@@ -138,7 +138,8 @@ container. The file is JSON:
    {
      "version": 1,
      "deviceId": "0123456789abcdef0123456789abcdef",
-     "name": "ironplcvm"
+     "name": "ironplcvm",
+     "retainedSavePeriod": 0
    }
 
 ``version``
@@ -154,6 +155,15 @@ container. The file is JSON:
 ``name``
    The name of the device: 1 to 64 characters, not blank, without control
    characters. The default is ``ironplcvm``. The ``identity`` answer reports it.
+
+``retainedSavePeriod``
+   How often the device writes the values of the retained variables while it
+   runs, in seconds: a whole number from 0 to 86400, written as a JSON number
+   (``60``, not ``"60"``). The default is ``0``: the device then writes the values
+   only when it stops and when ``assembleEdits`` commits a new program. A period
+   adds a write every period in which the values changed. A write replaces a
+   file on the disk, so a short period wears flash storage; a long one loses
+   more values when the power fails. See :ref:`ironplcvm-retained-values`.
 
 A device without a settings file is a new device. Delete the file to reset a
 device: the next start generates a new ``deviceId``. A file that lacks a setting
@@ -180,6 +190,9 @@ setting that it does not name stays as it is:
    * - ``name``
      - yes
      - yes
+   * - ``retainedSavePeriod``
+     - yes
+     - yes
 
 The device id is how a workstation recognises the device again, and the session
 cannot change it: an id that an engineer could change over the network could give
@@ -198,6 +211,71 @@ stay as they were.
 A settings file that the device cannot use stops :program:`ironplcvm serve`
 with :doc:`V6015 <problems/V6015>`. The device does not replace a damaged file
 with a new identity.
+
+.. _ironplcvm-retained-values:
+
+Retained values
+===============
+
+:program:`ironplcvm serve` keeps the values of the variables declared ``RETAIN``
+or ``PERSISTENT`` across a restart of the device, in the file
+:file:`{FILE}.retained` beside the served container. The device applies the file
+once, when it starts, before the first scan. A variable that is not retained
+starts with its initial value. See :doc:`/reference/language/variables/retention`
+for the variables and their qualifiers.
+
+The device writes the file at three points:
+
+- when :program:`ironplcvm serve` stops at the end of its input;
+- when ``assembleEdits`` commits a new program, with the values of the new
+  program;
+- every ``retainedSavePeriod`` seconds, at a scan boundary, when the values
+  changed and the setting is not ``0``.
+
+Each write is a temporary file :file:`{FILE}.retained.tmp` renamed over the
+file, so the file is always the old values or the new ones. The device writes
+nothing while a candidate runs under test, and nothing for a program that did
+not reach the slot store (:doc:`V6012 <problems/V6012>`), because the device would
+not start it again. The TCP listener of ``--listen`` has no controlled stop, so
+it writes at ``assembleEdits`` and at the period only.
+
+The device applies the file only to the program it was written for. The file
+carries the content hash of that program and a hash of the variables it
+retains. When either differs from the program that starts, or the file is
+damaged, the device discards the file, starts the retained variables with their
+initial values, and says so in the ``identity`` answer. A discarded file stays
+on the disk until the next write replaces it. The ``identity`` answer carries
+two optional fields next to ``application``:
+
+``retained``
+   What the device did with the file when it started.
+
+   .. list-table::
+      :header-rows: 1
+
+      * - Answer
+        - Meaning
+      * - ``{"result": "applied"}``
+        - The file belonged to the program and the device applied it.
+      * - ``{"result": "absent"}``
+        - There was no file.
+      * - ``{"result": "discarded", "reason": "damaged"}``
+        - The file could not be read, was not a retained file, or was cut short.
+      * - ``{"result": "discarded", "reason": "otherApplication"}``
+        - The file was written for another program.
+      * - ``{"result": "discarded", "reason": "otherRetainedLayout"}``
+        - The file holds other retained variables than the program declares.
+
+``persistedContentHash``
+   The content hash of the program the device starts after a restart. It equals
+   ``application.contentHash`` unless an ``assembleEdits`` was answered with
+   :doc:`V6012 <problems/V6012>`: the new program runs, and the device would
+   start the previous one.
+
+A write that fails is :doc:`V6018 <problems/V6018>`. The device keeps running and
+the file keeps its previous content. ``assembleEdits`` answers the error instead
+of the acknowledgment, the period logs it, and :program:`ironplcvm serve` exits
+with code 2 when the write at the stop fails.
 
 .. _ironplcvm-discovery:
 
