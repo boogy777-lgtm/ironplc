@@ -4,10 +4,12 @@
  * Disconnected, the item names the chosen controller and a click connects to it;
  * in every other state it behaves as it always did. It shows what exists and no
  * placeholders: nothing is said of the equality of the application or of Run and
- * Stop before a controller is connected. Vscode-free.
+ * Stop before a controller is connected. Connected, it adds what the device
+ * reports about scanning (`running`, `stopped`, `faulted V####`). Vscode-free.
  */
 
 import { ConnectionState } from './connectionState';
+import { currentRun, runStateDetail, runStateText } from './controllerRunLogic';
 import { DevicePanelModel } from './devicePanelLogic';
 import { formatStatusDetail } from './hotEditSession';
 import { HANDOFF_ACTIONS } from './vscodeCommon';
@@ -26,8 +28,11 @@ export function statusText(model: DevicePanelModel, chosen: string | undefined):
       return '$(sync~spin) IronPLC: Connecting…';
     case 'reconnecting':
       return '$(sync~spin) IronPLC: Reconnecting…';
-    case 'connected':
-      return `$(plug) IronPLC: ${model.identity?.device.name ?? model.profileName ?? 'Connected'}`;
+    case 'connected': {
+      const name = model.identity?.device.name ?? model.profileName ?? 'Connected';
+      const run = currentRun(model);
+      return run === null ? `$(plug) IronPLC: ${name}` : `$(plug) IronPLC: ${name} (${runStateText(run)})`;
+    }
   }
 }
 
@@ -43,6 +48,10 @@ export function statusTooltip(model: DevicePanelModel, chosen: string | undefine
       return 'The connection was lost; retrying with backoff. The device panel keeps the last data, marked stale.';
     case 'connected': {
       const lines = [`Profile: ${model.profileName ?? 'unknown'}`];
+      const run = currentRun(model);
+      if (run !== null) {
+        lines.push(...runStateDetail(run));
+      }
       if (model.lastStatus) {
         lines.push(formatStatusDetail(model.lastStatus));
       }

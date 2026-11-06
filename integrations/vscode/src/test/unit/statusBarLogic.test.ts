@@ -15,6 +15,8 @@ const STATUS: HotEditStatus = {
   rounds: 0,
 };
 
+const FAULT = { vCode: 'V4001', message: 'trap in task', taskId: 2, instanceId: 3 };
+
 const IDENTITY: IdentityInfo = {
   protocol: SUPPORTED_SESSION_PROTOCOL,
   device: { name: 'Press line 3', model: 'IronPLC SoftPLC', modification: 'vm-cli', runtimeVersion: '0.247.0' },
@@ -50,8 +52,24 @@ suite('statusText', () => {
 
   test('statusText_when_connected_then_the_device_name_whatever_is_chosen', () => {
     const connected = model({ state: 'connected', profileName: 'Press', identity: IDENTITY });
-    assert.strictEqual(statusText(connected, undefined), '$(plug) IronPLC: Press line 3');
-    assert.strictEqual(statusText(connected, '00ffeedd'), '$(plug) IronPLC: Press line 3');
+    assert.strictEqual(statusText(connected, undefined), '$(plug) IronPLC: Press line 3 (running)');
+    assert.strictEqual(statusText(connected, '00ffeedd'), '$(plug) IronPLC: Press line 3 (running)');
+  });
+
+  test('statusText_when_connected_then_the_run_state_the_device_reports', () => {
+    const stopped = model({ state: 'connected', identity: { ...IDENTITY, runState: 'stopped' } });
+    assert.strictEqual(statusText(stopped, undefined), '$(plug) IronPLC: Press line 3 (stopped)');
+    const faulted = model({ state: 'connected', identity: { ...IDENTITY, runState: 'running', fault: FAULT } });
+    assert.strictEqual(statusText(faulted, undefined), '$(plug) IronPLC: Press line 3 (faulted V4001)');
+  });
+
+  test('statusText_when_connected_and_run_or_stop_answered_then_the_answer_wins_over_the_identity', () => {
+    const connected = model({
+      state: 'connected',
+      identity: { ...IDENTITY, runState: 'running' },
+      run: { runState: 'stopped' },
+    });
+    assert.strictEqual(statusText(connected, undefined), '$(plug) IronPLC: Press line 3 (stopped)');
   });
 
   test('statusText_when_connected_without_an_identity_then_the_profile_name_else_connected', () => {
@@ -80,6 +98,23 @@ suite('statusTooltip', () => {
     const tooltip = statusTooltip(model({ state: 'connected', profileName: 'Press', lastStatus: STATUS }), undefined);
     assert.ok(tooltip.startsWith('Profile: Press'));
     assert.ok(tooltip.endsWith('Click for the IronPLC Device panel.'));
+  });
+
+  test('statusTooltip_when_connected_then_the_run_state_and_the_fault_in_full', () => {
+    const faulted = model({
+      state: 'connected',
+      profileName: 'Press',
+      identity: { ...IDENTITY, fault: FAULT },
+      run: { runState: 'stopped', fault: FAULT },
+    });
+    const tooltip = statusTooltip(faulted, undefined);
+    assert.ok(tooltip.includes('Run state: stopped'), tooltip);
+    assert.ok(tooltip.includes('Fault: V4001 - trap in task (task 2, instance 3)'), tooltip);
+  });
+
+  test('statusTooltip_when_connected_without_an_identity_or_answer_then_no_run_state_line', () => {
+    const tooltip = statusTooltip(model({ state: 'connected', profileName: 'Press' }), undefined);
+    assert.ok(!tooltip.includes('Run state'), tooltip);
   });
 
   test('statusTooltip_when_connecting_or_reconnecting_then_says_what_is_happening', () => {
