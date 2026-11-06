@@ -41,7 +41,7 @@ use ironplc_container::integrity::HASH_LEN;
 use ironplc_container::{Container, InstanceId, TaskId, VarIndex};
 use ironplc_vm::{earliest_due_us, rearm_cyclic_deadlines, FaultContext, Vm, VmBuffers};
 
-use crate::edit_guard::{edit_guard, edit_state, EditCommand, EditState, Steps, ITSELF};
+use crate::edit_guard::{edit_answer, edit_state, EditCommand, EditState, Steps, ITSELF};
 use crate::error::{OnlineChangeError, RuntimeError};
 use crate::generation::{ApplicationGeneration, LogicGeneration};
 use crate::migration::{MigrationDecision, StateMigrationPlan};
@@ -285,7 +285,7 @@ impl RuntimeHost {
     /// The transition table's answer for `command` in the current edit state:
     /// its steps, or the refusal.
     fn guard(&self, command: EditCommand) -> Result<Steps, OnlineChangeError> {
-        edit_guard(self.edit_state(), command)
+        edit_answer(self.edit_state(), command, self.pending_edit.as_ref())
     }
 
     /// Carries out `command` as the table says. A command with steps runs the

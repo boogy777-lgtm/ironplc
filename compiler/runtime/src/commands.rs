@@ -541,7 +541,7 @@ impl From<OnlineChangeError> for CommandError {
             OnlineChangeError::MigrationUnsupported(ref cause) => cause.v_code(),
             OnlineChangeError::UntestUnsupported => problem_codes::UNTEST_UNSUPPORTED,
             OnlineChangeError::NoCandidateStaged => problem_codes::NO_CANDIDATE_STAGED,
-            OnlineChangeError::CandidateAlreadyStaged => problem_codes::CANDIDATE_ALREADY_STAGED,
+            OnlineChangeError::CandidateAlreadyStaged(_) => problem_codes::CANDIDATE_ALREADY_STAGED,
             OnlineChangeError::NoTestInProgress => problem_codes::NO_TEST_IN_PROGRESS,
             OnlineChangeError::NotAllowedInThisMode => problem_codes::NOT_ALLOWED_IN_THIS_MODE,
             OnlineChangeError::AssembleWithoutTest => problem_codes::ASSEMBLE_WITHOUT_TEST,

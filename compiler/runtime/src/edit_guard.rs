@@ -27,7 +27,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::error::OnlineChangeError;
-use crate::host::PendingSwap;
+use crate::host::{PendingEditRecord, PendingSwap};
 
 /// Where the unfinished edit of a host stands, derived from its fields by
 /// [`edit_state`].
@@ -173,7 +173,7 @@ pub(crate) fn edit_guard(
             Cancel => Err(NoCandidateStaged),
         },
         EditState::Accepted { migration: _ } => match command {
-            Accept => Err(CandidateAlreadyStaged),
+            Accept => Err(CandidateAlreadyStaged(None)),
             Test => Ok(ITSELF),
             Untest => Err(NoTestInProgress),
             // The candidate never ran under Test (ADR-0064).
@@ -181,7 +181,7 @@ pub(crate) fn edit_guard(
             Cancel => Ok(ITSELF),
         },
         EditState::Testing { migration } => match command {
-            Accept => Err(CandidateAlreadyStaged),
+            Accept => Err(CandidateAlreadyStaged(None)),
             Test => Err(NotAllowedInThisMode),
             // A migration candidate has no revert path, and discarding it
             // would be one: the old buffers are not kept.
@@ -194,7 +194,7 @@ pub(crate) fn edit_guard(
             Cancel => Ok(UNTEST_THEN_CANCEL),
         },
         EditState::TestPending { migration: _ } => match command {
-            Accept => Err(CandidateAlreadyStaged),
+            Accept => Err(CandidateAlreadyStaged(None)),
             Test => Err(NotAllowedInThisMode),
             // The candidate is not active, so there is no test to revert.
             Untest => Err(NoTestInProgress),
@@ -202,13 +202,26 @@ pub(crate) fn edit_guard(
             Cancel => Err(NotAllowedInThisMode),
         },
         EditState::UntestPending => match command {
-            Accept => Err(CandidateAlreadyStaged),
+            Accept => Err(CandidateAlreadyStaged(None)),
             Test => Err(NotAllowedInThisMode),
             Untest => Err(NotAllowedInThisMode),
             Assemble => Err(NotAllowedInThisMode),
             Cancel => Err(NotAllowedInThisMode),
         },
     }
+}
+
+/// The answer of the table as the host gives it and the edit view shows it:
+/// [`edit_guard`], with the refusal about the staged edit naming that edit
+/// when the accept that staged it did (`pending`). The one place the two read
+/// the table, so the refusal a command gets and the reason the view gives are
+/// the same text.
+pub(crate) fn edit_answer(
+    state: EditState,
+    command: EditCommand,
+    pending: Option<&PendingEditRecord>,
+) -> Result<Steps, OnlineChangeError> {
+    edit_guard(state, command).map_err(|refusal| refusal.naming(pending))
 }
 
 #[cfg(test)]

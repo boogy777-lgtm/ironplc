@@ -470,8 +470,56 @@ fn stage_when_candidate_already_staged_then_candidate_already_staged_error() {
 
     assert!(matches!(
         result,
-        Err(OnlineChangeError::CandidateAlreadyStaged)
+        Err(OnlineChangeError::CandidateAlreadyStaged(None))
     ));
+}
+
+#[test]
+fn stage_when_staged_edit_has_name_and_origin_then_the_refusal_names_the_edit() {
+    let (mut host, _counter) = counter_host(1);
+    host.stage_with_decisions(
+        compile_source(&counter_program("Counter := Counter + 10;")),
+        &BTreeMap::new(),
+        Some(AcceptedEdit {
+            wire: Vec::new(),
+            name: Some("fix pump".to_string()),
+            origin: Some("studio on WS-12".to_string()),
+        }),
+    )
+    .unwrap();
+
+    let refusal = host
+        .stage(compile_source(&counter_program("Counter := Counter + 20;")))
+        .unwrap_err();
+
+    assert_eq!(
+        refusal.to_string(),
+        "a candidate is already staged: edit \"fix pump\" from \"studio on WS-12\""
+    );
+}
+
+#[test]
+fn stage_when_staged_edit_has_only_an_origin_then_the_refusal_names_the_origin() {
+    let (mut host, _counter) = counter_host(1);
+    host.stage_with_decisions(
+        compile_source(&counter_program("Counter := Counter + 10;")),
+        &BTreeMap::new(),
+        Some(AcceptedEdit {
+            wire: Vec::new(),
+            name: None,
+            origin: Some("studio on WS-12".to_string()),
+        }),
+    )
+    .unwrap();
+
+    let refusal = host
+        .stage(compile_source(&counter_program("Counter := Counter + 20;")))
+        .unwrap_err();
+
+    assert_eq!(
+        refusal.to_string(),
+        "a candidate is already staged: an edit from \"studio on WS-12\""
+    );
 }
 
 #[test]

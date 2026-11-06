@@ -22,6 +22,17 @@ A session accepts one edit and immediately tries to accept another:
    {"command":"acceptEdits","program":[...]}
    {"response":"error","vCode":"V4013","message":"a candidate is already staged"}
 
+When the ``acceptEdits`` that staged the candidate carried an ``edit`` block with
+a ``name``, an ``origin`` or both, the message names that edit, so that an
+engineer who finds the device occupied knows whose candidate is in the way:
+
+.. code-block::
+
+   {"response":"error","vCode":"V4013","message":"a candidate is already staged: edit \"fix pump\" from \"studio on WS-12\""}
+
+The ``reason`` of the ``accept`` command in the ``edit`` field of ``getStatus``
+has the same code and the same text.
+
 To fix this error, decide the fate of the staged candidate first. Send
 ``cancelEdits`` to discard it, or ``assembleEdits`` to commit it after it has
 run under test — a candidate of a state migration that is under test can only be

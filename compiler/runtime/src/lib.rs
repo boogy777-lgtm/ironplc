@@ -37,10 +37,8 @@ pub use commands::{
     SESSION_PROTOCOL_VERSION,
 };
 pub use edit_guard::EditCommand;
-pub use edit_view::{
-    edit_view, CommandView, Commands, EditStage, EditView, NextCommand, Reason,
-};
-pub use error::{OnlineChangeError, RuntimeError};
+pub use edit_view::{edit_view, CommandView, Commands, EditStage, EditView, NextCommand, Reason};
+pub use error::{OnlineChangeError, RuntimeError, StagedEdit};
 pub use generation::{ApplicationGeneration, LogicGeneration};
 pub use host::{
     AcceptedEdit, EditBaseline, HostMode, HostStatus, PendingEditRecord, RuntimeHost, ScanCommit,

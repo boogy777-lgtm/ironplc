@@ -15,10 +15,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::commands::CommandError;
 use crate::edit_guard::{
-    edit_guard, EditCommand, EditState, Steps, FINALIZE_ALL_LABEL, FINALIZE_ALL_STEPS,
+    edit_answer, EditCommand, EditState, Steps, FINALIZE_ALL_LABEL, FINALIZE_ALL_STEPS,
 };
 use crate::error::OnlineChangeError;
-use crate::host::HostStatus;
+use crate::host::{HostStatus, PendingEditRecord};
 
 /// Where the unfinished edit stands, in the words a client shows.
 ///
@@ -88,7 +88,10 @@ impl CommandView {
         CommandView {
             enabled: answer.is_ok(),
             label: label.to_string(),
-            steps: answer.as_ref().map(|steps| steps.to_vec()).unwrap_or_default(),
+            steps: answer
+                .as_ref()
+                .map(|steps| steps.to_vec())
+                .unwrap_or_default(),
             reason: answer.err().map(Reason::from),
         }
     }
@@ -156,21 +159,22 @@ fn next_command(state: EditState) -> Option<EditCommand> {
     }
 }
 
-/// The view of an edit state.
-pub(crate) fn view_of(state: EditState) -> EditView {
+/// The view of an edit state. `pending` is the record of the staged edit, which
+/// the refusal about a staged candidate names (see [`edit_answer`]).
+pub(crate) fn view_of(state: EditState, pending: Option<&PendingEditRecord>) -> EditView {
     let edit = EditCommand::ALL
         .into_iter()
         .map(|command| {
             (
                 command,
-                CommandView::new(command.label(), edit_guard(state, command)),
+                CommandView::new(command.label(), edit_answer(state, command, pending)),
             )
         })
         .collect();
     // The composite row is enabled when its first step is. The pattern is
     // irrefutable: the row has at least one step by its type.
     let [first, ..] = FINALIZE_ALL_STEPS;
-    let mut finalize_all = CommandView::new(FINALIZE_ALL_LABEL, edit_guard(state, first));
+    let mut finalize_all = CommandView::new(FINALIZE_ALL_LABEL, edit_answer(state, first, pending));
     finalize_all.steps = FINALIZE_ALL_STEPS.to_vec();
     EditView {
         stage: stage(state),
@@ -185,7 +189,7 @@ pub(crate) fn view_of(state: EditState) -> EditView {
 /// The edit view of a host status: which edit commands the host allows and,
 /// for each one it does not, why.
 pub fn edit_view(status: &HostStatus) -> EditView {
-    view_of(status.edit_state)
+    view_of(status.edit_state, status.pending_edit.as_ref())
 }
 
 #[cfg(test)]
@@ -200,12 +204,10 @@ mod tests {
         pending: Option<PendingSwap>,
         migration: bool,
     ) -> EditView {
-        view_of(edit_state(
-            candidate_staged,
-            active_is_candidate,
-            pending,
-            migration,
-        ))
+        view_of(
+            edit_state(candidate_staged, active_is_candidate, pending, migration),
+            None,
+        )
     }
 
     fn enabled(view: &EditView) -> Vec<EditCommand> {
@@ -258,7 +260,11 @@ mod tests {
         assert_eq!(view.stage, EditStage::Testing);
         assert_eq!(
             enabled(&view),
-            [EditCommand::Untest, EditCommand::Assemble, EditCommand::Cancel]
+            [
+                EditCommand::Untest,
+                EditCommand::Assemble,
+                EditCommand::Cancel
+            ]
         );
         assert_eq!(next(&view), Some(EditCommand::Assemble));
         assert_eq!(code(&view, EditCommand::Cancel), None);

@@ -4,8 +4,43 @@ use core::fmt;
 
 use ironplc_vm::FaultContext;
 
+use crate::host::PendingEditRecord;
 use crate::migration::MigrationError;
 use crate::problem_codes;
+
+/// The edit that holds the staged candidate, as its accept named it: the
+/// client-supplied label and the advisory client label of the
+/// [`PendingEditRecord`]. At least one is present; an accept that named
+/// neither leaves nothing to say.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StagedEdit {
+    /// The client-supplied edit label.
+    pub name: Option<String>,
+    /// The unauthenticated advisory client label.
+    pub origin: Option<String>,
+}
+
+impl StagedEdit {
+    /// The edit a record describes, or `None` when the accept named neither a
+    /// label nor an origin.
+    fn of(record: &PendingEditRecord) -> Option<StagedEdit> {
+        (record.name.is_some() || record.origin.is_some()).then(|| StagedEdit {
+            name: record.name.clone(),
+            origin: record.origin.clone(),
+        })
+    }
+}
+
+impl fmt::Display for StagedEdit {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match (&self.name, &self.origin) {
+            (Some(name), Some(origin)) => write!(f, "edit \"{name}\" from \"{origin}\""),
+            (Some(name), None) => write!(f, "edit \"{name}\""),
+            (None, Some(origin)) => write!(f, "an edit from \"{origin}\""),
+            (None, None) => write!(f, "an edit"),
+        }
+    }
+}
 
 /// Why a candidate was rejected or an online change request was refused.
 ///
@@ -35,8 +70,10 @@ pub enum OnlineChangeError {
     UntestUnsupported,
     /// The requested operation needs a staged candidate and none is staged.
     NoCandidateStaged,
-    /// `stage` was called while a candidate is already staged.
-    CandidateAlreadyStaged,
+    /// `stage` was called while a candidate is already staged. Carries the
+    /// edit that holds it when its accept named one, so the engineer knows
+    /// whose candidate is in the way; see [`OnlineChangeError::naming`].
+    CandidateAlreadyStaged(Option<StagedEdit>),
     /// `untest` was called while the original (not the candidate) is active.
     NoTestInProgress,
     /// The operation is not allowed in the current hot-edit phase, e.g.
@@ -50,6 +87,22 @@ pub enum OnlineChangeError {
     /// declared layout: the payload is internally inconsistent, so the
     /// apply refused without touching a byte (the crossload seam).
     SnapshotCorrupt,
+}
+
+impl OnlineChangeError {
+    /// Adds what the host knows about the staged edit to a refusal that is
+    /// about it. The transition table answers with the bare refusal, and the
+    /// host and the edit view both call this with the pending-edit record, so
+    /// the text a refused command gets and the reason the view gives are built
+    /// here and nowhere else.
+    pub(crate) fn naming(self, pending: Option<&PendingEditRecord>) -> OnlineChangeError {
+        match self {
+            OnlineChangeError::CandidateAlreadyStaged(_) => {
+                OnlineChangeError::CandidateAlreadyStaged(pending.and_then(StagedEdit::of))
+            }
+            other => other,
+        }
+    }
 }
 
 impl fmt::Display for OnlineChangeError {
@@ -75,8 +128,11 @@ impl fmt::Display for OnlineChangeError {
                 "untest and cancel are not supported after a schema-changing test; assemble instead"
             ),
             OnlineChangeError::NoCandidateStaged => write!(f, "no candidate is staged"),
-            OnlineChangeError::CandidateAlreadyStaged => {
+            OnlineChangeError::CandidateAlreadyStaged(None) => {
                 write!(f, "a candidate is already staged")
+            }
+            OnlineChangeError::CandidateAlreadyStaged(Some(edit)) => {
+                write!(f, "a candidate is already staged: {edit}")
             }
             OnlineChangeError::NoTestInProgress => write!(f, "no test is in progress"),
             OnlineChangeError::NotAllowedInThisMode => {
@@ -179,7 +235,7 @@ mod tests {
             "no candidate is staged"
         );
         assert_eq!(
-            OnlineChangeError::CandidateAlreadyStaged.to_string(),
+            OnlineChangeError::CandidateAlreadyStaged(None).to_string(),
             "a candidate is already staged"
         );
         assert_eq!(

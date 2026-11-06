@@ -375,6 +375,7 @@ fn status_payload_when_edit_view_present_then_round_trips_through_the_wire() {
     let mut payload: StatusPayload = serde_json::from_str(STATUS_WITHOUT_HASHES).unwrap();
     payload.edit = Some(Box::new(crate::edit_view::view_of(
         crate::edit_guard::EditState::Testing { migration: true },
+        None,
     )));
 
     let line = render_response(&Response::Status(payload.clone())).unwrap();
@@ -487,7 +488,7 @@ fn command_error_display_then_formats_code_dash_message() {
 )]
 #[case::untest(OnlineChangeError::UntestUnsupported, "V4011")]
 #[case::none_staged(OnlineChangeError::NoCandidateStaged, "V4012")]
-#[case::already_staged(OnlineChangeError::CandidateAlreadyStaged, "V4013")]
+#[case::already_staged(OnlineChangeError::CandidateAlreadyStaged(None), "V4013")]
 #[case::no_test(OnlineChangeError::NoTestInProgress, "V4014")]
 #[case::wrong_mode(OnlineChangeError::NotAllowedInThisMode, "V4015")]
 #[case::without_test(OnlineChangeError::AssembleWithoutTest, "V4017")]
