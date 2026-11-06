@@ -465,10 +465,11 @@ What exists today:
 - **Run control.** The hot-edit FSM commands apply or revert the upload at
   a scan boundary: `testEdits` / `untestEdits` / `assembleEdits` /
   `cancelEdits` (the `Command` variants in
-  `compiler/runtime/src/commands.rs`), with the serve session driving the
-  boundary round before acknowledging (`drive_scan_round` in
-  `compiler/vm-cli/src/serve.rs`, REQ-VC-vm-cli-023). `getStatus`
-  reads back the running generation.
+  `compiler/runtime/src/commands.rs`). The device loop
+  (`compiler/vm-cli/src/device_loop.rs`, ADR-0086) owns the host and scans by
+  itself; it runs the boundary round of a swap request at once and
+  acknowledges after it (REQ-VC-vm-cli-023). `getStatus` reads back the
+  running generation.
 
 ### Two build modes
 
@@ -509,9 +510,9 @@ The online build has two commit policies over the same upload
 Zero new commands: these are exactly the hot-edit FSM commands — `test`,
 `untest`, `assemble`, `cancel` (the `RuntimeHost` methods of those
 names in `compiler/runtime/src/host.rs`) — applied at a scan boundary
-(`RuntimeHost::apply_pending_swap`), with the serve session driving the
-boundary round before it acknowledges (`drive_scan_round` in
-`compiler/vm-cli/src/serve.rs`).
+(`RuntimeHost::apply_pending_swap`), with the device loop running the boundary
+round before it acknowledges (`DeviceLoop::step` in
+`compiler/vm-cli/src/device_loop.rs`).
 
 The device panel renders a Testing phase from the reported `mode`, and
 Revert is disabled or rejected when the status reports `migration: true`:
@@ -691,7 +692,8 @@ Everything reused, with its one authority:
 | Compile | `compile` in `compiler/ironplc-cli/src/cli.rs`; arg vector `compileArgs` in `integrations/vscode/src/taskProviderLogic.ts` |
 | Upload | `Command::AcceptEdits` in `compiler/runtime/src/commands.rs` |
 | Verify | `verify_load` in `compiler/container/src/load_verify.rs`; `validate_candidate` in `compiler/runtime/src/online_change.rs` |
-| Run control | `Command` variants in `compiler/runtime/src/commands.rs`; boundary round `drive_scan_round` in `compiler/vm-cli/src/serve.rs` |
+| Run control | `Command` variants in `compiler/runtime/src/commands.rs`; the scan and the boundary round of a swap: `DeviceLoop` in `compiler/vm-cli/src/device_loop.rs` (ADR-0086) |
+| Fault of the scan | `FaultNote` in `compiler/runtime/src/commands.rs`; `Device::note_fault` in `compiler/vm-cli/src/device_settings/device.rs` |
 | V-code registries | `compiler/vm-cli/resources/problem-codes.csv` (V6013/V6014, the transport codes, beside the existing V6011/V6012; V6015/V6016, the device settings), `compiler/runtime/resources/problem-codes.csv` (V4021, a host without device settings) |
 | E-code registry and rendering | `integrations/vscode-common/resources/problem-codes.csv` (E0010+), `formatProblem` in `integrations/vscode-common/src/problems.ts` |
 | Heartbeat | `getStatus` — `Command::GetStatus` in `compiler/runtime/src/commands.rs` |

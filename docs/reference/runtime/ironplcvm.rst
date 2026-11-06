@@ -81,11 +81,14 @@ Commands
    Print the version number of the virtual machine.
 
 :program:`ironplcvm serve` *FILE*
-   Load a bytecode container (``.iplc``) file into the runtime host and serve
-   the hot-edit command protocol on stdin/stdout until EOF. One line of
+   Load a bytecode container (``.iplc``) file into the runtime host, run its
+   scan cycle, and serve the hot-edit command protocol on stdin/stdout until
+   EOF or :kbd:`Ctrl+C`. One line of
    stdin carries one command; one line of stdout carries one response,
    flushed after every line. Startup prints nothing to stdout — the stream
-   carries protocol lines only, so the session is safe to script.
+   carries protocol lines only, so the session is safe to script. The device
+   scans by itself, as ``run`` does, and executes each command between two
+   rounds (see :ref:`ironplcvm-scan`).
 
    Commands are the hot-edit protocol commands: ``getStatus``, ``acceptEdits``
    (the compiled container as a JSON array of byte values, plus an optional
@@ -101,12 +104,9 @@ Commands
    decision can replace. A line that does
    not parse as a command is answered with an error line whose ``vCode`` is
    null — codec errors carry no V-code. A ``testEdits``, ``untestEdits`` or
-   ``assembleEdits`` acknowledgment records a swap that applies at the next
-   scan boundary: after the acknowledgment, the session drives one scan round
-   at a constant zero uptime, before the response line is written, so the
-   swap has been applied when the line reaches the client. A trap in that
-   round is logged to stderr with the trap's V-code and the session
-   continues.
+   ``assembleEdits`` records a swap that applies at a scan boundary, and its
+   acknowledgment is written after that boundary, so the swap has been applied
+   when the line reaches the client.
 
    ``--listen`` *ADDR*
       Serve the same protocol on TCP instead of stdin/stdout. *ADDR* is
@@ -123,6 +123,45 @@ Commands
       Do not answer discovery. The device then opens no UDP port, and a
       workstation connects to it by an address it already knows. Requires
       ``--listen``.
+
+.. _ironplcvm-scan:
+
+The scan of the device
+======================
+
+:program:`ironplcvm serve` runs the scan cycle of the program by itself, from the
+start of the device until it is stopped, paced the way ``run`` paces it: a
+cyclic task runs once in each of its periods, and a program without a cyclic
+task runs its next round at once. The commands of the session do not start
+rounds; the device executes each command between two rounds and answers it at
+once, so a command does not wait for the period of the tasks. The one kind of
+command that is not answered at once is a request of a swap: ``testEdits``,
+``untestEdits`` and ``assembleEdits`` are each answered after the round that
+applied them, and the device runs that round without waiting for the period.
+
+A device that holds no execution permit (a secondary unit of a redundant pair)
+runs no round and still answers every command.
+
+:kbd:`Ctrl+C` stops the device in order, on stdin/stdout and on TCP alike: the
+device finishes the round that is running, answers the commands it has
+executed, writes the retained values (see :ref:`ironplcvm-retained-values`) and
+exits with code 0.
+
+A trap in a round stops the scan. The device is *faulted*: it runs no further
+round until it is started again, and it still answers every command. The trap
+is logged to stderr with its V-code, and the ``identity`` answer carries the
+optional field ``fault`` next to ``application`` for as long as the device is
+faulted:
+
+.. code-block::
+
+   {"response":"identity", ..., "fault":{"vCode":"V4001","message":"runtime error: divide by zero (task 0, instance 0)","taskId":0,"instanceId":0}}
+
+``vCode`` is the V-code of the trap, ``message`` says what happened, and
+``taskId`` and ``instanceId`` name the task and the program instance that were
+running. The field is absent while the device is not faulted. A ``testEdits`` or
+``untestEdits`` on a faulted device is still applied and acknowledged; the
+program does not run.
 
 .. _ironplcvm-device-settings:
 
@@ -226,7 +265,8 @@ for the variables and their qualifiers.
 
 The device writes the file at three points:
 
-- when :program:`ironplcvm serve` stops at the end of its input;
+- when :program:`ironplcvm serve` stops, at the end of its input or at
+  :kbd:`Ctrl+C`;
 - when ``assembleEdits`` commits a new program, with the values of the new
   program;
 - every ``retainedSavePeriod`` seconds, at a scan boundary, when the values
@@ -236,8 +276,7 @@ Each write is a temporary file :file:`{FILE}.retained.tmp` renamed over the
 file, so the file is always the old values or the new ones. The device writes
 nothing while a candidate runs under test, and nothing for a program that did
 not reach the slot store (:doc:`V6012 <problems/V6012>`), because the device would
-not start it again. The TCP listener of ``--listen`` has no controlled stop, so
-it writes at ``assembleEdits`` and at the period only.
+not start it again.
 
 The device applies the file only to the program it was written for. The file
 carries the content hash of that program and a hash of the variables it
