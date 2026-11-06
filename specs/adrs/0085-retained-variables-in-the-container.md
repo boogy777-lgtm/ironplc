@@ -150,7 +150,8 @@ computed in a second place.
 fields of its type. The qualifier of the declaration is the one the user wrote
 last and the one that covers the whole instance, so it decides. This rule is
 not confirmed against the text of IEC 61131-3 or a CODESYS page; if either says
-otherwise, the rule is one arm of `retain_kind` in `codegen/src/retained.rs`.
+otherwise, the rule is the `NonRetain` arm of `record_declaration` in
+`codegen/src/retained.rs`.
 
 A `RETAIN` local of a function is a syntax error in the parser. One of a method
 parses, and a `RETAIN` local of a function can reach code generation from a
