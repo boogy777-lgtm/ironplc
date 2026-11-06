@@ -233,6 +233,65 @@ reports the scan, apart from each other. A standby that is promoted after the
 death of its peer runs the takeover round at once, unless the operator stopped
 it: the stop stands until a ``startScan``.
 
+.. _ironplcvm-edit-view:
+
+The edit view
+=============
+
+The ``getStatus`` answer, and the ``application`` block of the ``identity``
+answer, carry the field ``edit``: which edit commands the device allows now,
+and for each one that it does not, why. A client shows this and decides nothing
+itself, because the device builds it from the same table that it uses to accept
+or refuse the command. A device that predates the field omits it.
+
+.. code-block:: json
+
+   {
+     "stage": "accepted",
+     "commands": {
+       "accept": {"enabled": false, "label": "Accept",
+                  "reason": {"code": "V4013", "text": "a candidate is already staged"}},
+       "test": {"enabled": true, "label": "Test"},
+       "untest": {"enabled": false, "label": "Untest",
+                  "reason": {"code": "V4014", "text": "no test is in progress"}},
+       "assemble": {"enabled": false, "label": "Assemble",
+                    "reason": {"code": "V4017", "text": "assemble requires the candidate to have executed under Test"}},
+       "cancel": {"enabled": true, "label": "Cancel"},
+       "finalizeAll": {"enabled": false, "label": "Finalize all",
+                       "reason": {"code": "V4013", "text": "a candidate is already staged"},
+                       "steps": ["accept", "test", "assemble"]}
+     },
+     "next": {"command": "test", "label": "Test"}
+   }
+
+``stage``
+   Where the edit stands: ``idle`` (no candidate), ``accepted`` (a candidate is
+   staged and the original executes), ``testing`` (the candidate executes),
+   ``testingMigration`` (the candidate of a state migration executes, and
+   ``untestEdits`` is refused with :doc:`V4011 <problems/V4011>`) or
+   ``swapPending`` (a ``testEdits`` or ``untestEdits`` waits for the next scan
+   boundary, and no edit command is allowed until then).
+
+``commands``
+   One entry for each of ``accept``, ``test``, ``untest``, ``assemble`` and
+   ``cancel``, which are ``acceptEdits``, ``testEdits``, ``untestEdits``,
+   ``assembleEdits`` and ``cancelEdits``, and for ``finalizeAll``. ``enabled``
+   is true exactly when the device accepts the command now. ``label`` is the
+   plain English name to show. ``reason`` is present when ``enabled`` is false:
+   the problem code and the text of the refusal that the command would get.
+   ``finalizeAll`` is the composite command that runs ``steps`` in order, one
+   after the other, with the scan boundary between them that applies a swap. It
+   is enabled when its first step is, so it is offered only while no candidate
+   is staged.
+
+``next``
+   The command that moves the edit one stage on: ``accept`` when idle, ``test``
+   when accepted, ``assemble`` when testing. It is always enabled. It is absent
+   while a swap is pending.
+
+The scan control (``startScan`` and ``stopScan``) and ``setDeviceSettings``
+are allowed in every stage and are not part of the view.
+
 .. _ironplcvm-device-settings:
 
 Device settings

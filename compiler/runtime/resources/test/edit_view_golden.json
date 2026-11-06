@@ -1,0 +1,474 @@
+[
+  {
+    "state": "NoCandidate",
+    "view": {
+      "commands": {
+        "accept": {
+          "enabled": true,
+          "label": "Accept"
+        },
+        "assemble": {
+          "enabled": false,
+          "label": "Assemble",
+          "reason": {
+            "code": "V4012",
+            "text": "no candidate is staged"
+          }
+        },
+        "cancel": {
+          "enabled": false,
+          "label": "Cancel",
+          "reason": {
+            "code": "V4012",
+            "text": "no candidate is staged"
+          }
+        },
+        "finalizeAll": {
+          "enabled": true,
+          "label": "Finalize all",
+          "steps": [
+            "accept",
+            "test",
+            "assemble"
+          ]
+        },
+        "test": {
+          "enabled": false,
+          "label": "Test",
+          "reason": {
+            "code": "V4012",
+            "text": "no candidate is staged"
+          }
+        },
+        "untest": {
+          "enabled": false,
+          "label": "Untest",
+          "reason": {
+            "code": "V4014",
+            "text": "no test is in progress"
+          }
+        }
+      },
+      "next": {
+        "command": "accept",
+        "label": "Accept"
+      },
+      "stage": "idle"
+    }
+  },
+  {
+    "state": "Accepted",
+    "view": {
+      "commands": {
+        "accept": {
+          "enabled": false,
+          "label": "Accept",
+          "reason": {
+            "code": "V4013",
+            "text": "a candidate is already staged"
+          }
+        },
+        "assemble": {
+          "enabled": false,
+          "label": "Assemble",
+          "reason": {
+            "code": "V4017",
+            "text": "assemble requires the candidate to have executed under Test"
+          }
+        },
+        "cancel": {
+          "enabled": true,
+          "label": "Cancel"
+        },
+        "finalizeAll": {
+          "enabled": false,
+          "label": "Finalize all",
+          "reason": {
+            "code": "V4013",
+            "text": "a candidate is already staged"
+          },
+          "steps": [
+            "accept",
+            "test",
+            "assemble"
+          ]
+        },
+        "test": {
+          "enabled": true,
+          "label": "Test"
+        },
+        "untest": {
+          "enabled": false,
+          "label": "Untest",
+          "reason": {
+            "code": "V4014",
+            "text": "no test is in progress"
+          }
+        }
+      },
+      "next": {
+        "command": "test",
+        "label": "Test"
+      },
+      "stage": "accepted"
+    }
+  },
+  {
+    "state": "AcceptedMigration",
+    "view": {
+      "commands": {
+        "accept": {
+          "enabled": false,
+          "label": "Accept",
+          "reason": {
+            "code": "V4013",
+            "text": "a candidate is already staged"
+          }
+        },
+        "assemble": {
+          "enabled": false,
+          "label": "Assemble",
+          "reason": {
+            "code": "V4017",
+            "text": "assemble requires the candidate to have executed under Test"
+          }
+        },
+        "cancel": {
+          "enabled": true,
+          "label": "Cancel"
+        },
+        "finalizeAll": {
+          "enabled": false,
+          "label": "Finalize all",
+          "reason": {
+            "code": "V4013",
+            "text": "a candidate is already staged"
+          },
+          "steps": [
+            "accept",
+            "test",
+            "assemble"
+          ]
+        },
+        "test": {
+          "enabled": true,
+          "label": "Test"
+        },
+        "untest": {
+          "enabled": false,
+          "label": "Untest",
+          "reason": {
+            "code": "V4014",
+            "text": "no test is in progress"
+          }
+        }
+      },
+      "next": {
+        "command": "test",
+        "label": "Test"
+      },
+      "stage": "accepted"
+    }
+  },
+  {
+    "state": "Testing",
+    "view": {
+      "commands": {
+        "accept": {
+          "enabled": false,
+          "label": "Accept",
+          "reason": {
+            "code": "V4013",
+            "text": "a candidate is already staged"
+          }
+        },
+        "assemble": {
+          "enabled": true,
+          "label": "Assemble"
+        },
+        "cancel": {
+          "enabled": false,
+          "label": "Cancel",
+          "reason": {
+            "code": "V4015",
+            "text": "operation not allowed in the current hot-edit phase"
+          }
+        },
+        "finalizeAll": {
+          "enabled": false,
+          "label": "Finalize all",
+          "reason": {
+            "code": "V4013",
+            "text": "a candidate is already staged"
+          },
+          "steps": [
+            "accept",
+            "test",
+            "assemble"
+          ]
+        },
+        "test": {
+          "enabled": false,
+          "label": "Test",
+          "reason": {
+            "code": "V4015",
+            "text": "operation not allowed in the current hot-edit phase"
+          }
+        },
+        "untest": {
+          "enabled": true,
+          "label": "Untest"
+        }
+      },
+      "next": {
+        "command": "assemble",
+        "label": "Assemble"
+      },
+      "stage": "testing"
+    }
+  },
+  {
+    "state": "TestingMigration",
+    "view": {
+      "commands": {
+        "accept": {
+          "enabled": false,
+          "label": "Accept",
+          "reason": {
+            "code": "V4013",
+            "text": "a candidate is already staged"
+          }
+        },
+        "assemble": {
+          "enabled": true,
+          "label": "Assemble"
+        },
+        "cancel": {
+          "enabled": false,
+          "label": "Cancel",
+          "reason": {
+            "code": "V4015",
+            "text": "operation not allowed in the current hot-edit phase"
+          }
+        },
+        "finalizeAll": {
+          "enabled": false,
+          "label": "Finalize all",
+          "reason": {
+            "code": "V4013",
+            "text": "a candidate is already staged"
+          },
+          "steps": [
+            "accept",
+            "test",
+            "assemble"
+          ]
+        },
+        "test": {
+          "enabled": false,
+          "label": "Test",
+          "reason": {
+            "code": "V4015",
+            "text": "operation not allowed in the current hot-edit phase"
+          }
+        },
+        "untest": {
+          "enabled": false,
+          "label": "Untest",
+          "reason": {
+            "code": "V4011",
+            "text": "untest is not supported after a schema-changing test; assemble or cancel instead"
+          }
+        }
+      },
+      "next": {
+        "command": "assemble",
+        "label": "Assemble"
+      },
+      "stage": "testingMigration"
+    }
+  },
+  {
+    "state": "TestPending",
+    "view": {
+      "commands": {
+        "accept": {
+          "enabled": false,
+          "label": "Accept",
+          "reason": {
+            "code": "V4013",
+            "text": "a candidate is already staged"
+          }
+        },
+        "assemble": {
+          "enabled": false,
+          "label": "Assemble",
+          "reason": {
+            "code": "V4015",
+            "text": "operation not allowed in the current hot-edit phase"
+          }
+        },
+        "cancel": {
+          "enabled": false,
+          "label": "Cancel",
+          "reason": {
+            "code": "V4015",
+            "text": "operation not allowed in the current hot-edit phase"
+          }
+        },
+        "finalizeAll": {
+          "enabled": false,
+          "label": "Finalize all",
+          "reason": {
+            "code": "V4013",
+            "text": "a candidate is already staged"
+          },
+          "steps": [
+            "accept",
+            "test",
+            "assemble"
+          ]
+        },
+        "test": {
+          "enabled": false,
+          "label": "Test",
+          "reason": {
+            "code": "V4015",
+            "text": "operation not allowed in the current hot-edit phase"
+          }
+        },
+        "untest": {
+          "enabled": false,
+          "label": "Untest",
+          "reason": {
+            "code": "V4014",
+            "text": "no test is in progress"
+          }
+        }
+      },
+      "stage": "swapPending"
+    }
+  },
+  {
+    "state": "TestPendingMigration",
+    "view": {
+      "commands": {
+        "accept": {
+          "enabled": false,
+          "label": "Accept",
+          "reason": {
+            "code": "V4013",
+            "text": "a candidate is already staged"
+          }
+        },
+        "assemble": {
+          "enabled": false,
+          "label": "Assemble",
+          "reason": {
+            "code": "V4015",
+            "text": "operation not allowed in the current hot-edit phase"
+          }
+        },
+        "cancel": {
+          "enabled": false,
+          "label": "Cancel",
+          "reason": {
+            "code": "V4015",
+            "text": "operation not allowed in the current hot-edit phase"
+          }
+        },
+        "finalizeAll": {
+          "enabled": false,
+          "label": "Finalize all",
+          "reason": {
+            "code": "V4013",
+            "text": "a candidate is already staged"
+          },
+          "steps": [
+            "accept",
+            "test",
+            "assemble"
+          ]
+        },
+        "test": {
+          "enabled": false,
+          "label": "Test",
+          "reason": {
+            "code": "V4015",
+            "text": "operation not allowed in the current hot-edit phase"
+          }
+        },
+        "untest": {
+          "enabled": false,
+          "label": "Untest",
+          "reason": {
+            "code": "V4014",
+            "text": "no test is in progress"
+          }
+        }
+      },
+      "stage": "swapPending"
+    }
+  },
+  {
+    "state": "UntestPending",
+    "view": {
+      "commands": {
+        "accept": {
+          "enabled": false,
+          "label": "Accept",
+          "reason": {
+            "code": "V4013",
+            "text": "a candidate is already staged"
+          }
+        },
+        "assemble": {
+          "enabled": false,
+          "label": "Assemble",
+          "reason": {
+            "code": "V4015",
+            "text": "operation not allowed in the current hot-edit phase"
+          }
+        },
+        "cancel": {
+          "enabled": false,
+          "label": "Cancel",
+          "reason": {
+            "code": "V4015",
+            "text": "operation not allowed in the current hot-edit phase"
+          }
+        },
+        "finalizeAll": {
+          "enabled": false,
+          "label": "Finalize all",
+          "reason": {
+            "code": "V4013",
+            "text": "a candidate is already staged"
+          },
+          "steps": [
+            "accept",
+            "test",
+            "assemble"
+          ]
+        },
+        "test": {
+          "enabled": false,
+          "label": "Test",
+          "reason": {
+            "code": "V4015",
+            "text": "operation not allowed in the current hot-edit phase"
+          }
+        },
+        "untest": {
+          "enabled": false,
+          "label": "Untest",
+          "reason": {
+            "code": "V4015",
+            "text": "operation not allowed in the current hot-edit phase"
+          }
+        }
+      },
+      "stage": "swapPending"
+    }
+  }
+]

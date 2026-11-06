@@ -154,6 +154,10 @@ pub struct HostStatus {
     pub content_hash: [u8; HASH_LEN],
     /// The `layout_hash` of the normal artifact's header, as the host loaded it.
     pub layout_hash: [u8; HASH_LEN],
+    /// Where the unfinished edit stands: the state the edit guards read,
+    /// derived once by the host. The edit view is built from this, so it
+    /// cannot disagree with what the host accepts.
+    pub(crate) edit_state: EditState,
 }
 
 /// The container whose code runs: the staged candidate while it is active,
@@ -434,6 +438,7 @@ impl RuntimeHost {
             pending_edit: self.pending_edit.clone(),
             content_hash: self.normal.header.content_hash,
             layout_hash: self.normal.header.layout_hash,
+            edit_state: self.edit_state(),
         }
     }
 

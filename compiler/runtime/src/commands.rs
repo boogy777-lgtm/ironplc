@@ -18,6 +18,7 @@ use ironplc_container::Container;
 use serde::{Deserialize, Serialize};
 
 use crate::conversion::type_name;
+use crate::edit_view::{edit_view, EditView};
 use crate::error::OnlineChangeError;
 use crate::host::{AcceptedEdit, HostMode, HostStatus, PendingEditRecord, RuntimeHost};
 use crate::migration::{MigrationDecision, MigrationError, TypeChangePair};
@@ -218,6 +219,13 @@ pub struct StatusPayload {
     /// [`content_hash`](Self::content_hash).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub layout_hash: Option<String>,
+    /// Which edit commands the host allows now, and why not for the others
+    /// (ADR-0087). Built from the host's own transition table, so the allowed
+    /// set is the set the host accepts. Absent on the wire from a device that
+    /// predates the field. Boxed: the view is larger than the rest of the
+    /// payload, and `Response` holds a payload by value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub edit: Option<Box<EditView>>,
 }
 
 /// The wire form of a header hash: lowercase hexadecimal, or `None` for the
@@ -228,6 +236,7 @@ fn wire_hash(hash: &[u8; HASH_LEN]) -> Option<String> {
 
 impl From<HostStatus> for StatusPayload {
     fn from(status: HostStatus) -> Self {
+        let edit = edit_view(&status);
         StatusPayload {
             mode: status.mode,
             active: status.active.raw(),
@@ -239,6 +248,7 @@ impl From<HostStatus> for StatusPayload {
             pending_edit: status.pending_edit,
             content_hash: wire_hash(&status.content_hash),
             layout_hash: wire_hash(&status.layout_hash),
+            edit: Some(Box::new(edit)),
         }
     }
 }

@@ -14,6 +14,8 @@
     reason = "integration test target: panicking helpers are sanctioned in tests and each target uses a subset of the shared helpers"
 )]
 
+pub mod edit_states;
+
 use std::io::Cursor;
 
 use ironplc_codegen::EmptyLookup;

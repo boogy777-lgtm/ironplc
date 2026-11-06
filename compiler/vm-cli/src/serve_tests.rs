@@ -311,6 +311,40 @@ fn serve_session_when_identity_then_application_carries_the_hashes_of_the_loaded
     assert_eq!(responses[0]["application"]["layoutHash"], hashes.1);
 }
 
+/// REQ-VC-vm-cli-054: the status carries the edit view, and it follows the
+/// host through accept and test, in `getStatus` and in the `application`
+/// block of `identity`.
+#[spec_test(REQ_VC_vm_cli_054)]
+#[test]
+fn serve_session_when_edit_progresses_then_status_carries_the_edit_view_of_the_host() {
+    let mut host = counter_host();
+    let accept = accept_test_assemble_lines(container_bytes(&counter_source(10)));
+    let lines = [
+        r#"{"command":"getStatus"}"#,
+        accept[0].as_str(),
+        r#"{"command":"getStatus"}"#,
+        accept[1].as_str(),
+        r#"{"command":"identity"}"#,
+    ];
+
+    let responses = run_session(&mut host, &lines);
+
+    assert_eq!(responses[0]["edit"]["stage"], "idle");
+    assert_eq!(responses[0]["edit"]["next"]["command"], "accept");
+    assert_eq!(responses[2]["edit"]["stage"], "accepted");
+    assert_eq!(responses[2]["edit"]["commands"]["test"]["enabled"], true);
+    assert_eq!(
+        responses[2]["edit"]["commands"]["accept"]["reason"]["code"],
+        "V4013"
+    );
+    // The test was applied before its acknowledgment (REQ-VC-vm-cli-023).
+    assert_eq!(responses[4]["application"]["edit"]["stage"], "testing");
+    assert_eq!(
+        responses[4]["application"]["edit"]["next"]["command"],
+        "assemble"
+    );
+}
+
 #[test]
 fn serve_session_when_committed_then_rebooted_then_same_content_hash_and_restarted_counters() {
     let dir = tempfile::TempDir::new().unwrap();
