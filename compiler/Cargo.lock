@@ -1204,6 +1204,7 @@ dependencies = [
  "ironplc-test",
  "log",
  "rstest",
+ "serde",
  "serde_json",
  "spec_test_macro",
  "tempfile",
