@@ -47,11 +47,12 @@
 use std::io::{self, BufRead, Write};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
 
-use ironplc_redundancy::Shell;
+use ironplc_redundancy::{NicPort, PairLink, Shell, UdpPort};
 use ironplc_runtime::{FaultNote, RuntimeHost};
 
 use crate::device_settings::device::Device;
 use crate::error::VmError;
+use crate::ha_pair::{self, PUMP_PERIOD_US};
 use crate::pacer::{is_due, Clock, Pacer, SystemClock};
 use crate::serve::{
     execute_line, finish_line, paced_round, stop_device, Executed, Executing, Ha, RoundOutcome,
@@ -131,22 +132,36 @@ pub(crate) fn relay_session(
     Ok(())
 }
 
+/// The HA backend the loop owns: the shell of the standalone and the simulated
+/// pair, or the link of a real pair. The pair is a backend like the shell, not a
+/// second driver: the loop ticks it, reconciles the permit from its verdict, and
+/// runs the rounds.
+pub(crate) enum Backend<P: NicPort> {
+    /// The honest standalone shell or the simulated pair.
+    Shell(Box<Shell>),
+    /// The link of one unit of a real two-process pair.
+    Pair(PairLink<P>),
+}
+
 /// What the loop owns: the host and everything that is touched together with
 /// it. Only the loop thread holds this.
-struct Owned {
+struct Owned<P: NicPort> {
     host: RuntimeHost,
     store: Option<SlotStore>,
     device: Device,
-    shell: Shell,
+    backend: Backend<P>,
 }
 
-impl Owned {
-    fn core(&mut self) -> Core<'_> {
+impl<P: NicPort> Owned<P> {
+    fn core(&mut self) -> Core<'_, P> {
         Core {
             host: &mut self.host,
             store: self.store.as_mut(),
             device: &mut self.device,
-            shell: Some(&mut self.shell),
+            ha: Some(match &mut self.backend {
+                Backend::Shell(shell) => Ha::Shell(shell.as_mut()),
+                Backend::Pair(link) => Ha::Pair(link),
+            }),
         }
     }
 }
@@ -162,14 +177,14 @@ pub(crate) enum Submitted {
 
 /// The loop without a clock and a channel: the host and its companions by
 /// reference, and the three things a loop does with them.
-pub(crate) struct Core<'a> {
+pub(crate) struct Core<'a, P: NicPort = UdpPort> {
     pub(crate) host: &'a mut RuntimeHost,
     pub(crate) store: Option<&'a mut SlotStore>,
     pub(crate) device: &'a mut Device,
-    pub(crate) shell: Option<&'a mut Shell>,
+    pub(crate) ha: Option<Ha<'a, P>>,
 }
 
-impl Core<'_> {
+impl<P: NicPort> Core<'_, P> {
     /// Whether the device may run a scheduled round: it holds the execution
     /// permit, its scan has not trapped and it is not stopped. The one place
     /// that decides it.
@@ -180,13 +195,12 @@ impl Core<'_> {
     /// Executes one command line. The simulated pair ticks first: the command
     /// cadence is its clock, one tick per line whatever the command.
     pub(crate) fn submit(&mut self, line: &str) -> io::Result<Submitted> {
-        if let Some(shell) = self.shell.as_deref_mut() {
+        if let Some(Ha::Shell(shell)) = self.ha.as_mut() {
             if shell.has_pair() {
                 shell.tick();
             }
         }
-        let mut ha = self.shell.as_deref_mut().map(Ha::Shell);
-        match execute_line(self.host, self.device, ha.as_mut(), line)? {
+        match execute_line(self.host, self.device, self.ha.as_mut(), line)? {
             Executed::Answer(answer) => Ok(Submitted::Answered(answer)),
             Executed::Command(executing) if executing.awaits_boundary() => {
                 Ok(Submitted::AwaitsBoundary(executing))
@@ -207,8 +221,7 @@ impl Core<'_> {
             }
             return;
         }
-        let mut ha = self.shell.as_deref_mut().map(Ha::Shell);
-        match paced_round(self.host, ha.as_mut(), uptime_us) {
+        match paced_round(self.host, self.ha.as_mut(), uptime_us) {
             RoundOutcome::Completed => self.device.scan_boundary(self.host),
             RoundOutcome::Refused | RoundOutcome::Invariant => {}
             RoundOutcome::Trapped(context) => {
@@ -226,14 +239,28 @@ impl Core<'_> {
 
     /// Writes the response line of an executed command, after its boundary.
     pub(crate) fn finish(&mut self, executing: Executing) -> io::Result<String> {
-        let mut ha = self.shell.as_deref_mut().map(Ha::Shell);
         finish_line(
             self.host,
             self.store.as_deref_mut(),
             self.device,
-            ha.as_mut(),
+            self.ha.as_mut(),
             executing,
         )
+    }
+
+    /// Whether the composition has a pair link for the loop to pump.
+    pub(crate) fn is_paired(&self) -> bool {
+        matches!(self.ha, Some(Ha::Pair(_)))
+    }
+
+    /// Ticks the pair link once, if the composition has one, and acts on what
+    /// the tick reports; see [`ha_pair::pump`]. The loop calls it at the pump
+    /// cadence, never more often: the link's liveness counts exchanges, so a
+    /// link ticked faster than its peer would count the peer dead.
+    pub(crate) fn pump_pair(&mut self) {
+        if let Some(Ha::Pair(link)) = self.ha.as_mut() {
+            ha_pair::pump(link, self.host, self.store.as_deref_mut(), self.device);
+        }
     }
 }
 
@@ -247,8 +274,8 @@ pub(crate) enum End {
 }
 
 /// The device loop; see the module documentation.
-pub(crate) struct DeviceLoop<C: Clock = SystemClock> {
-    owned: Owned,
+pub(crate) struct DeviceLoop<C: Clock = SystemClock, P: NicPort = UdpPort> {
+    owned: Owned<P>,
     pacer: Pacer<C>,
     commands: Receiver<Envelope>,
     /// A command that arrived while the loop waited for a deadline; executed
@@ -260,12 +287,15 @@ pub(crate) struct DeviceLoop<C: Clock = SystemClock> {
     closed: bool,
     /// Whether the previous iteration could scan; a change to `true` is a resume.
     scanning: bool,
+    /// The uptime at which the pair link is ticked next; only a loop with a pair
+    /// link looks at it.
+    next_pump_us: u64,
 }
 
 impl<C: Clock> DeviceLoop<C> {
-    /// A loop over the composed device. `commands` is the receiving end of
-    /// [`channel`]; the loop ends with [`End::Closed`] when every
-    /// [`LoopHandle`] has been dropped.
+    /// A loop over the composed device with the shell of the standalone or the
+    /// simulated pair. `commands` is the receiving end of [`channel`]; the loop
+    /// ends with [`End::Closed`] when every [`LoopHandle`] has been dropped.
     pub(crate) fn new(
         host: RuntimeHost,
         store: Option<SlotStore>,
@@ -274,12 +304,52 @@ impl<C: Clock> DeviceLoop<C> {
         pacer: Pacer<C>,
         commands: Receiver<Envelope>,
     ) -> Self {
+        Self::with_backend(
+            host,
+            store,
+            device,
+            Backend::Shell(Box::new(shell)),
+            pacer,
+            commands,
+        )
+    }
+}
+
+impl<C: Clock, P: NicPort> DeviceLoop<C, P> {
+    /// A loop over the composed device with the link of one unit of a real
+    /// pair: the loop ticks the link at the pump cadence ([`PUMP_PERIOD_US`]).
+    pub(crate) fn paired(
+        host: RuntimeHost,
+        store: SlotStore,
+        device: Device,
+        link: PairLink<P>,
+        pacer: Pacer<C>,
+        commands: Receiver<Envelope>,
+    ) -> Self {
+        Self::with_backend(
+            host,
+            Some(store),
+            device,
+            Backend::Pair(link),
+            pacer,
+            commands,
+        )
+    }
+
+    fn with_backend(
+        host: RuntimeHost,
+        store: Option<SlotStore>,
+        device: Device,
+        backend: Backend<P>,
+        pacer: Pacer<C>,
+        commands: Receiver<Envelope>,
+    ) -> Self {
         Self {
             owned: Owned {
                 host,
                 store,
                 device,
-                shell,
+                backend,
             },
             pacer,
             commands,
@@ -287,6 +357,7 @@ impl<C: Clock> DeviceLoop<C> {
             parked: Vec::new(),
             closed: false,
             scanning: false,
+            next_pump_us: 0,
         }
     }
 
@@ -317,6 +388,13 @@ impl<C: Clock> DeviceLoop<C> {
 
         let now_us = self.pacer.uptime_us();
         let mut core = self.owned.core();
+        if core.is_paired() && now_us >= self.next_pump_us {
+            // The pump of the pair link, before the permit is read: a verdict
+            // the tick decides (admission, a promotion) is this iteration's, so
+            // the takeover round is the round of this iteration.
+            core.pump_pair();
+            self.next_pump_us = now_us + PUMP_PERIOD_US;
+        }
         let may_scan = core.can_scan();
         if may_scan && !self.scanning {
             // The first iteration, a start, a returned permit: no round ran
@@ -339,11 +417,18 @@ impl<C: Clock> DeviceLoop<C> {
             return Some(End::Stopped);
         }
 
+        // The wait ends at the next deadline of a cyclic task or at the next tick
+        // of the pair link, whichever comes first; a freewheeling program does
+        // not wait for either, a device that does not scan waits for the tick.
+        let pump_us = core.is_paired().then_some(self.next_pump_us);
         let waited = if core.can_scan() {
-            self.pacer
-                .wait_for_message(core.host.next_due_us(), &self.commands)
+            let wake_us = match (core.host.next_due_us(), pump_us) {
+                (Some(due_us), Some(pump_us)) => Some(due_us.min(pump_us)),
+                (due_us, _) => due_us,
+            };
+            self.pacer.wait_for_message(wake_us, &self.commands)
         } else {
-            self.pacer.wait_idle(&self.commands)
+            self.pacer.wait_idle(pump_us, &self.commands)
         };
         match waited {
             Ok(envelope) => self.arrived = Some(envelope),
@@ -370,7 +455,7 @@ impl<C: Clock> DeviceLoop<C> {
 
     /// The owned things, for the tests that look at the device after steps.
     #[cfg(test)]
-    pub(crate) fn core(&mut self) -> Core<'_> {
+    pub(crate) fn core(&mut self) -> Core<'_, P> {
         self.owned.core()
     }
 }

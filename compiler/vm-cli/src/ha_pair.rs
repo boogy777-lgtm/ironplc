@@ -7,54 +7,59 @@
 //! redundancy crate's [`PairLink`] over the [`UdpPort`] binding owns the
 //! pair link — the liveness exchange, admission discovery, the SYNC
 //! chart, the epoch, the crossload receiver, and the ADR-0064 outbound
-//! pipeline. The session is the existing JSON session
-//! ([`handle_line`](crate::serve::handle_line)); the pump is the only new
-//! shape: a stdin-reader thread feeds lines over a channel, and the
-//! session loop waits on the channel with a short timeout, so the pair
-//! link keeps exchanging with the peer process while no command arrives
-//! — the Secondary, in particular, synchronizes, replicates, and
-//! promotes with no client connected at all.
+//! pipeline. The pair is a composition of the device loop
+//! ([`DeviceLoop`](crate::device_loop::DeviceLoop), ADR-0086, stage 3d), as the
+//! standalone and the simulated shells are: the loop owns the host and the
+//! link, answers the session over a channel like stdio does, and runs the
+//! scan rounds. So the Primary scans between commands, and the Secondary
+//! synchronizes, replicates, and promotes with no client connected at all.
 //!
-//! The pump cadence is the composition's clock: one [`PairLink::tick`]
-//! per wait (per line, or per timeout), the execution permit reconciled
-//! from the link's verdict after every tick (the policy/mechanism split
-//! — a promoted unit is granted before its takeover round drives), a
-//! confirmed peer death promotes the survivor per ADR-0064(e) (the
-//! takeover policy, modeled at the verdict/policy layer — the fencing
-//! barrier is a later slice), and a peer-applied assemble persists the
-//! drained commit bytes through this unit's slot store (ADR-0064(h):
-//! both units persist inside the one commit transaction).
+//! The pump cadence is the composition's clock: the loop calls [`pump`] once
+//! per [`PUMP_PERIOD_US`] and waits no longer than that, whatever the tasks'
+//! periods are. A pump is one [`PairLink::tick`], the execution permit
+//! reconciled from the link's verdict ([`apply_pair_permit`]; the
+//! policy/mechanism split — a promoted unit is granted before it scans, so the
+//! next round is the takeover round it owes the pair), and a peer-applied
+//! assemble persists the drained commit bytes through this unit's slot store
+//! (ADR-0064(h): both units persist inside the one commit transaction). A
+//! confirmed peer death promotes the survivor per ADR-0064(e) (the takeover
+//! policy, modeled at the verdict/policy layer — the fencing barrier is a later
+//! slice).
 
-use std::io::{self, BufRead, Write};
 use std::net::SocketAddr;
 use std::path::Path;
-use std::sync::mpsc::{self, RecvTimeoutError};
-use std::time::Duration;
 
-use ironplc_redundancy::{AdmissionVerdict, PairLink, RedundancyConfig, UdpPort};
+use ironplc_redundancy::{AdmissionVerdict, NicPort, PairLink, RedundancyConfig, UdpPort};
 use ironplc_runtime::RuntimeHost;
 
+use crate::device_loop::DeviceLoop;
 use crate::device_settings::device::Device;
 use crate::error::{self, VmError};
-use crate::serve::{boot_host, commit_assembled, drive_scan_round, handle_line, stop_device, Ha};
+use crate::serve::{boot_host, commit_assembled, serve_stdio};
 use crate::slot_store::SlotStore;
 
-/// The pump cadence: how long the session loop waits for a command line
-/// before ticking the pair link anyway. Bounds the pair's convergence
-/// and failover latency in this soft-device composition; a controller
-/// daemon drives the link on a hardware cadence instead.
-const PUMP_PERIOD: Duration = Duration::from_millis(5);
+/// The pump cadence in microseconds: how often the loop ticks the pair link,
+/// and the longest it waits for anything before ticking it. Bounds the pair's
+/// convergence and failover latency in this soft-device composition; a
+/// controller daemon drives the link on a hardware cadence instead.
+///
+/// The link's liveness counts exchanges, not time, so this is also the least
+/// time between two ticks: a link ticked faster than its peer (once per round
+/// of a freewheeling program) would count a peer that answers at this cadence
+/// as dead.
+pub(crate) const PUMP_PERIOD_US: u64 = 5_000;
 
 /// Boots the committed artifact from the A/B slot store beside `path`,
 /// composes the host with the pair link over UDP (`bind`, connected to
-/// the peer's `peer`), and serves commands until stdin reaches EOF.
+/// the peer's `peer`), and serves commands on stdin and stdout while the device
+/// loop scans, until stdin reaches EOF or Ctrl+C.
 pub fn serve_pair(
     path: &Path,
     config: RedundancyConfig,
     bind: SocketAddr,
     peer: SocketAddr,
 ) -> Result<(), VmError> {
-    let mut store = SlotStore::beside(path);
+    let store = SlotStore::beside(path);
     let container = store.boot()?;
     let mut host = boot_host(container)?;
     let port = UdpPort::bind(bind, peer).map_err(|err| {
@@ -70,86 +75,43 @@ pub fn serve_pair(
         )
     })?;
     log::info!("serving the HA pair link on {local} (peer {peer})");
-    let mut link = PairLink::new(config, port);
+    let link = PairLink::new(config, port);
     let mut device = Device::open(path)?;
     device.boot_application(&mut host);
 
-    // The stdin reader thread: the session loop multiplexes commands and
-    // the pump over the channel, so the pair link outlives idle periods
-    // (the Secondary pumps forever with no client). EOF drops the sender
-    // and ends the loop.
-    let (line_tx, line_rx) = mpsc::channel::<io::Result<String>>();
-    std::thread::spawn(move || {
-        let stdin = io::stdin();
-        for line in stdin.lock().lines() {
-            if line_tx.send(line).is_err() {
-                return;
-            }
-        }
-    });
-
-    let stdout = io::stdout();
-    let mut out = stdout.lock();
-    let session = serve_pair_loop(
-        &mut host,
-        &mut store,
-        &mut link,
-        &mut device,
-        &line_rx,
-        &mut out,
-    )
-    .map_err(|err| {
-        VmError::io(
-            error::SESSION_IO,
-            format!("unable to read or write the command session: {err}"),
-        )
-    });
-    stop_device(&mut device, &host, session)
+    serve_stdio(|pacer, commands| DeviceLoop::paired(host, store, device, link, pacer, commands))
 }
 
-/// The pair-mode session loop: waits for a command line (or the pump
-/// timeout), ticks the pair link, reconciles the permit with the
-/// verdict, acts on the tick's outcomes, and answers the line through
-/// the shared [`handle_line`] dispatch.
-fn serve_pair_loop(
+/// One pump of the pair link, between rounds: ticks the link, reconciles the
+/// permit with its verdict, and acts on the tick's outcomes.
+///
+/// A promotion (the survivor of a confirmed peer death, ADR-0064(e)) needs no
+/// action here: the verdict made the permit granted, so the unit scans again,
+/// and the first round it runs is the boundary round the survivor owes the
+/// pair, which mints the next epoch through the scan-commit seam. If the
+/// operator has stopped the device, no round runs until the start.
+pub(crate) fn pump<P: NicPort>(
+    link: &mut PairLink<P>,
     host: &mut RuntimeHost,
-    store: &mut SlotStore,
-    link: &mut PairLink<UdpPort>,
+    store: Option<&mut SlotStore>,
     device: &mut Device,
-    line_rx: &mpsc::Receiver<io::Result<String>>,
-    out: &mut impl Write,
-) -> io::Result<()> {
-    loop {
-        let line = match line_rx.recv_timeout(PUMP_PERIOD) {
-            Ok(line) => Some(line?),
-            Err(RecvTimeoutError::Timeout) => None,
-            Err(RecvTimeoutError::Disconnected) => return Ok(()),
-        };
-        let tick = link.tick(host);
-        apply_pair_permit(host, link);
-        if tick.promoted {
-            // The takeover (ADR-0064(e)): the permit is granted, so the
-            // boundary round the survivor owes the pair mints the next
-            // epoch through the scan-commit seam.
-            log::info!("promoted after the peer's death; executing the candidate");
-            if let Some(err) = drive_scan_round(host, Some(&mut Ha::Pair(link))) {
-                log::error!("takeover scan round trapped: {err}");
+) {
+    let tick = link.tick(host);
+    apply_pair_permit(host, link);
+    if tick.promoted {
+        log::info!("promoted after the peer's death; executing the candidate");
+    }
+    if tick.peer_committed {
+        // ADR-0064(h): the peer's assemble applied on this unit; its commit
+        // bytes drain through this unit's slot store, so both units persist
+        // inside the one transaction.
+        match store {
+            Some(store) => {
+                if let Err(err) = commit_assembled(host, store, device) {
+                    log::error!("peer commit persistence failed: {err}");
+                }
             }
-            device.scan_boundary(host);
-        }
-        if tick.peer_committed {
-            // ADR-0064(h): the peer's assemble applied on this unit; its
-            // commit bytes drain through this unit's slot store, so both
-            // units persist inside the one transaction.
-            if let Err(err) = commit_assembled(host, store, device) {
-                log::error!("peer commit persistence failed: {err}");
-            }
-        }
-        if let Some(line) = line {
-            let response =
-                handle_line(host, Some(store), device, Some(&mut Ha::Pair(link)), &line)?;
-            writeln!(out, "{response}")?;
-            out.flush()?;
+            None => log::error!("the peer committed but this unit has no slot store"),
         }
     }
 }
@@ -158,7 +120,7 @@ fn serve_pair_loop(
 /// redundancy architecture's policy/mechanism split): the owner executes,
 /// everything else — a standby, a unit whose admission is still
 /// undecided — refuses at the latch (V4018) instead of executing.
-fn apply_pair_permit(host: &mut RuntimeHost, link: &PairLink<UdpPort>) {
+fn apply_pair_permit<P: NicPort>(host: &mut RuntimeHost, link: &PairLink<P>) {
     match link.local_verdict() {
         Some(AdmissionVerdict::Primary) | Some(AdmissionVerdict::Standalone) => {
             host.permit_execution()

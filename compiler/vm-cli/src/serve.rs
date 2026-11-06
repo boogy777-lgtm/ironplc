@@ -60,23 +60,23 @@
 //! latch from the next line on). A round's scan-commit callback feeds the HA
 //! backend's scan-commit seam, the supervisor's mint seam.
 //!
-//! The pair path ([`crate::ha_pair`]) does not run on the loop yet (stage 3d
-//! of the online-model plan, ADR-0086): its pump calls [`handle_line`] per
-//! line and per pump tick, which executes and finishes a line like the loop
-//! does and drives the boundary round of a swap request itself
-//! ([`drive_scan_round`]). Both paths answer the runtime vocabulary, the slot
-//! persistence, and — in pair mode — the ADR-0064 crossload hooks (the offer at
-//! Accept, the state update at Test, the cancel/untest/assemble notices)
-//! through the [`Ha`] backend enum.
+//! The pair path ([`crate::ha_pair`]) is a composition of the same loop: the
+//! loop owns the pair link, ticks it at the pump cadence, and runs the rounds
+//! (ADR-0086, stage 3d). Every composition answers the runtime vocabulary, the
+//! slot persistence, and — in pair mode — the ADR-0064 crossload hooks (the
+//! offer at Accept, the state update at Test, the cancel/untest/assemble
+//! notices) through the [`Ha`] backend enum.
 
 use std::io;
 use std::path::Path;
+use std::sync::mpsc::Receiver;
 
 use ironplc_container::Container;
 use ironplc_redundancy::{
     execute_ha, package_offer, pair_link_status, parse_ha_command, permit_for, render_ha_response,
     AdmissionVerdict, ConfiguredRole, CrossloadMessage, HaCommand, HaResponse, ModuleId,
-    ModuleRegistry, ModuleTiming, PairId, PairLink, RedundancyConfig, Shell, Side, UdpPort,
+    ModuleRegistry, ModuleTiming, NicPort, PairId, PairLink, RedundancyConfig, Shell, Side,
+    UdpPort,
 };
 use ironplc_runtime::{
     execute, parse_command, render_response, Command, RedundancyIdentity, Response, RuntimeError,
@@ -84,22 +84,26 @@ use ironplc_runtime::{
 };
 use ironplc_vm::FaultContext;
 
-use crate::device_loop::{self, relay_session, DeviceLoop, End};
+use crate::device_loop::{self, relay_session, DeviceLoop, End, Envelope};
 use crate::device_settings::device::Device;
 use crate::device_settings::Entries;
 use crate::error::{self, VmError};
-use crate::pacer::Pacer;
+use crate::pacer::{Pacer, SystemClock};
 use crate::slot_store::SlotStore;
 
 /// The HA backend one session serves: the demo binding's simulator shell,
 /// or the real pair link over the UDP binding (the two-process pair).
 /// Both own the permit *policy* the session reconciles with the host's
 /// latch; the enum is the session's one dispatch shape, not a layer.
-pub(crate) enum Ha<'a> {
+///
+/// The pair link is generic over its port: the UDP binding of the two-process
+/// pair is the default, and a hardware binding (EtherNet/IP) is another
+/// [`NicPort`] behind the same link, with nothing here or in the loop to change.
+pub(crate) enum Ha<'a, P: NicPort = UdpPort> {
     /// The simulated loopback pair (the `--ha-simulated-peer` demo).
     Shell(&'a mut Shell),
-    /// The real pair link over UDP (the `--ha-peer-bind` composition).
-    Pair(&'a mut PairLink<UdpPort>),
+    /// The real pair link (the `--ha-peer-bind` composition).
+    Pair(&'a mut PairLink<P>),
 }
 
 /// Boots the committed artifact from the A/B slot store beside `path`
@@ -114,6 +118,21 @@ pub fn serve(path: &Path, ha_simulated_peer: bool) -> Result<(), VmError> {
     let mut device = Device::open(path)?;
     device.boot_application(&mut host);
 
+    serve_stdio(|pacer, commands| {
+        DeviceLoop::new(host, Some(store), device, shell, pacer, commands)
+    })
+}
+
+/// Serves the command session of stdin and stdout through the device loop that
+/// `compose` builds, and returns the outcome of the process: the session of
+/// every stdio composition (standalone, simulated pair, real pair).
+///
+/// `compose` receives the pacer (stopped by Ctrl+C) and the receiving end of
+/// the loop's command channel, so the composition decides only what the loop
+/// owns.
+pub(crate) fn serve_stdio<P: NicPort>(
+    compose: impl FnOnce(Pacer, Receiver<Envelope>) -> DeviceLoop<SystemClock, P>,
+) -> Result<(), VmError> {
     let stop = crate::cli::stop_on_ctrl_c()?;
     let (handle, commands) = device_loop::channel();
     // The session thread: the loop is the main thread, because it ends the
@@ -128,14 +147,7 @@ pub fn serve(path: &Path, ha_simulated_peer: bool) -> Result<(), VmError> {
                 format!("unable to spawn the session thread: {err}"),
             )
         })?;
-    let mut device_loop = DeviceLoop::new(
-        host,
-        Some(store),
-        device,
-        shell,
-        Pacer::start(stop, None),
-        commands,
-    );
+    let mut device_loop = compose(Pacer::start(stop, None), commands);
     let session = match device_loop.run() {
         // The session thread ended: its outcome is the outcome of the session.
         End::Closed => relay
@@ -310,10 +322,10 @@ impl Executing {
 /// every transport, and `setDeviceSettings` changes it. The runtime command
 /// layer has no file system, so the settings command is answered here, the way
 /// the slot store persists the commit of `assembleEdits` (see [`finish_line`]).
-pub(crate) fn execute_line(
+pub(crate) fn execute_line<P: NicPort>(
     host: &mut RuntimeHost,
     device: &mut Device,
-    mut ha: Option<&mut Ha>,
+    mut ha: Option<&mut Ha<P>>,
     line: &str,
 ) -> io::Result<Executed> {
     match parse_command(line) {
@@ -321,11 +333,10 @@ pub(crate) fn execute_line(
             set_device_settings_line(device, &settings).map(Executed::Answer)
         }
         // The scan control is answered here, by the application that drives the
-        // rounds; the pair path does not scan by itself yet, so there the
-        // runtime refuses it (V4022) rather than report a state it cannot keep.
-        Ok(command @ (Command::StartScan | Command::StopScan))
-            if !matches!(ha.as_deref(), Some(Ha::Pair(_))) =>
-        {
+        // rounds: the device loop drives every composition of `serve`, so each
+        // has a scan to start and stop. The runtime refuses it (V4022) only for
+        // a host without a scan loop.
+        Ok(command @ (Command::StartScan | Command::StopScan)) => {
             scan_control_line(host, device, &command).map(Executed::Answer)
         }
         Ok(command) => {
@@ -404,11 +415,11 @@ pub(crate) fn execute_line(
 /// wire bytes (see [`persist_commit`]); a `None` store serves the honestly
 /// RAM-only session (no persistence). In pair mode, an acknowledged hot-edit
 /// command also owes the pair its ADR-0064 notice (see [`PairNotice`]).
-pub(crate) fn finish_line(
+pub(crate) fn finish_line<P: NicPort>(
     host: &mut RuntimeHost,
     store: Option<&mut SlotStore>,
     device: &mut Device,
-    ha: Option<&mut Ha>,
+    ha: Option<&mut Ha<P>>,
     executing: Executing,
 ) -> io::Result<String> {
     let acked = matches!(executing.response, Response::Ack);
@@ -434,42 +445,15 @@ pub(crate) fn finish_line(
     }
 }
 
-/// Answers one command line with the session's single response line, driving
-/// the scan boundary a swap request awaits by itself.
-///
-/// This is the dispatch of the HA pair path ([`crate::ha_pair`]), whose pump
-/// has no scan loop yet: an acknowledged `testEdits`, `untestEdits` or
-/// `assembleEdits` drives one scan round after its acknowledgment, before the
-/// response line is written (see [`drive_scan_round`]).
-// Until the pair composes onto the device loop (stage 3d of the online-model
-// plan, ADR-0086): the loop executes the lines through `execute_line` and
-// `finish_line` and runs its own rounds, so no other path drives one.
-pub(crate) fn handle_line(
-    host: &mut RuntimeHost,
-    store: Option<&mut SlotStore>,
-    device: &mut Device,
-    mut ha: Option<&mut Ha>,
-    line: &str,
-) -> io::Result<String> {
-    match execute_line(host, device, ha.as_deref_mut(), line)? {
-        Executed::Answer(answer) => Ok(answer),
-        Executed::Command(executing) => {
-            if executing.awaits_boundary() {
-                if let Some(err) = drive_scan_round(host, ha.as_deref_mut()) {
-                    log::error!("driven scan round trapped: {err}");
-                }
-                device.scan_boundary(host);
-            }
-            finish_line(host, store, device, ha, executing)
-        }
-    }
-}
-
 /// Enqueues the pair-lifecycle notice an acknowledged command owes (the
 /// ADR-0064 outbound pipeline): the offer packages the staged candidate
 /// with the session's wire bytes at Accept; the Test snapshot rides the
-/// just-driven boundary; the remaining notices carry no payload.
-fn pair_post_command(ha: Option<&mut Ha>, notice: Option<PairNotice>, host: &mut RuntimeHost) {
+/// boundary round that applied it; the remaining notices carry no payload.
+fn pair_post_command<P: NicPort>(
+    ha: Option<&mut Ha<P>>,
+    notice: Option<PairNotice>,
+    host: &mut RuntimeHost,
+) {
     let (Some(Ha::Pair(link)), Some(notice)) = (ha, notice) else {
         return;
     };
@@ -495,7 +479,7 @@ fn pair_post_command(ha: Option<&mut Ha>, notice: Option<PairNotice>, host: &mut
 /// The ADR-0063 identity redundancy block, filled from the composed HA
 /// backend: present exactly when a pair is configured (absent means
 /// standalone), the same additive-block shape the runtime layer defines.
-fn ha_identity_block(ha: &Ha) -> Option<RedundancyIdentity> {
+fn ha_identity_block<P: NicPort>(ha: &Ha<P>) -> Option<RedundancyIdentity> {
     match ha {
         Ha::Shell(shell) => identity_block(shell),
         Ha::Pair(link) => pair_identity_block(link),
@@ -506,7 +490,7 @@ fn ha_identity_block(ha: &Ha) -> Option<RedundancyIdentity> {
 /// and the epoch are the link's own; the CONTROL substate is the
 /// permit-based stand-in — `active` while this unit executes, `idle`
 /// otherwise — until the fencing slice owns the CONTROL chart.
-fn pair_identity_block(link: &PairLink<UdpPort>) -> Option<RedundancyIdentity> {
+fn pair_identity_block<P: NicPort>(link: &PairLink<P>) -> Option<RedundancyIdentity> {
     let status = link.status();
     let control = match status.admitted {
         Some(AdmissionVerdict::Primary) | Some(AdmissionVerdict::Standalone) => "active",
@@ -737,7 +721,7 @@ fn round_outcome(result: Result<(), RuntimeError>) -> RoundOutcome {
 /// boundary reports through the scan-commit seam — the epoch mint and the
 /// generations are the supervisor's answer to the boundary. Without one, the
 /// standalone composition only observes the boundary identity, as it always has.
-fn notify_commit(ha: Option<&mut Ha>, commit: ScanCommit) {
+fn notify_commit<P: NicPort>(ha: Option<&mut Ha<P>>, commit: ScanCommit) {
     match ha {
         Some(Ha::Shell(shell)) => shell.on_scan_commit(commit),
         Some(Ha::Pair(link)) => link.on_scan_commit(commit),
@@ -748,36 +732,14 @@ fn notify_commit(ha: Option<&mut Ha>, commit: ScanCommit) {
 /// Runs one round of the paced scan at `uptime_us`: the cyclic tasks keep the
 /// deadlines the previous round set (see [`RuntimeHost::run_paced_round`]). The
 /// round of the device loop.
-pub(crate) fn paced_round(
+pub(crate) fn paced_round<P: NicPort>(
     host: &mut RuntimeHost,
-    mut ha: Option<&mut Ha>,
+    mut ha: Option<&mut Ha<P>>,
     uptime_us: u64,
 ) -> RoundOutcome {
     round_outcome(
         host.run_paced_round(uptime_us, |commit| notify_commit(ha.as_deref_mut(), commit)),
     )
-}
-
-/// Drives the one scan round that applies a swap acknowledged on the wire,
-/// at the constant-zero clock of the runtime acceptance tests (every task is
-/// ready immediately, so the boundary round runs each task exactly once).
-///
-/// Only the HA pair path calls this, until it composes onto the device loop
-/// (stage 3d of the online-model plan, ADR-0086); the loop's next round is the
-/// boundary of a swap.
-///
-/// Returns the trap as a [`VmError`] — its V-code is the trap's own — so the
-/// caller can surface it; a trapped round does not end the session.
-pub(crate) fn drive_scan_round(host: &mut RuntimeHost, mut ha: Option<&mut Ha>) -> Option<VmError> {
-    let result = host.run_with_commit(1, || 0, |commit| notify_commit(ha.as_deref_mut(), commit));
-    match round_outcome(result) {
-        RoundOutcome::Trapped(context) => Some(VmError::from_trap(
-            &context.trap,
-            context.task_id,
-            context.instance_id,
-        )),
-        RoundOutcome::Completed | RoundOutcome::Refused | RoundOutcome::Invariant => None,
-    }
 }
 
 /// Renders the transport-level error for a line that did not parse as a

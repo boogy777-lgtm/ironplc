@@ -12,13 +12,13 @@
 use std::io;
 
 use ironplc_container::Container;
-use ironplc_redundancy::{ConfiguredRole, PairId, PairLink, RedundancyConfig, Shell, UdpPort};
-use ironplc_runtime::{execute, parse_command, Command, Response, RuntimeHost};
+use ironplc_redundancy::Shell;
+use ironplc_runtime::RuntimeHost;
 use spec_test_macro::spec_test;
 
 use crate::device_loop::scripted::serve_session;
 use crate::device_settings::device::Device;
-use crate::serve::{compose_host, drive_scan_round, handle_line, Ha};
+use crate::serve::compose_host;
 use crate::slot_store::SlotStore;
 
 /// A `PROGRAM main` with one DINT `Counter` incremented by `step` per
@@ -545,28 +545,6 @@ END_PROGRAM
     );
 }
 
-#[test]
-fn drive_scan_round_when_round_traps_then_trap_v_code() {
-    let mut host = counter_host();
-    let device = Device::in_memory().identity();
-    let accept = parse_command(
-        &serde_json::json!({"command": "acceptEdits", "program": trapping_container_bytes()})
-            .to_string(),
-    )
-    .unwrap();
-    assert!(matches!(execute(accept, &mut host, &device), Response::Ack));
-    assert!(matches!(
-        execute(Command::TestEdits, &mut host, &device),
-        Response::Ack
-    ));
-
-    let err = drive_scan_round(&mut host, None).unwrap();
-
-    assert!(err
-        .to_string()
-        .starts_with("V4001 - runtime error: divide by zero"));
-}
-
 /// REQ-VC-vm-cli-020: a malformed line is a codec error — no V-code — so
 /// the answer carries a null vCode and the session keeps serving.
 #[spec_test(REQ_VC_vm_cli_020)]
@@ -903,43 +881,4 @@ fn serve_session_when_ha_partitioned_then_swap_refused_and_keepalives_resync() {
     let healed = run_ha_session(&mut host, &mut shell, &heal_lines);
     assert_eq!(healed[8]["local"]["sync"], "syncReady");
     assert_eq!(healed[8]["takeoverReady"], true);
-}
-
-/// A pair unit has no scan loop yet: the scan control is refused by the
-/// runtime (V4022) rather than answered with a state the unit cannot keep.
-#[spec_test(REQ_VC_vm_cli_051)]
-#[test]
-fn handle_line_when_scan_control_over_the_pair_link_then_v4022() {
-    let (mut host, _shell) = counter_ha(false);
-    let loopback = std::net::SocketAddr::from(([127, 0, 0, 1], 0));
-    let port = UdpPort::bind(loopback, std::net::SocketAddr::from(([127, 0, 0, 1], 9))).unwrap();
-    let mut link = PairLink::new(
-        RedundancyConfig::pair(PairId::new(7), ConfiguredRole::Primary),
-        port,
-    );
-    let mut device = Device::in_memory();
-
-    let started = handle_line(
-        &mut host,
-        None,
-        &mut device,
-        Some(&mut Ha::Pair(&mut link)),
-        r#"{"command":"startScan"}"#,
-    )
-    .unwrap();
-    let stopped = handle_line(
-        &mut host,
-        None,
-        &mut device,
-        Some(&mut Ha::Pair(&mut link)),
-        r#"{"command":"stopScan"}"#,
-    )
-    .unwrap();
-
-    assert_eq!(parse(&started)["vCode"], "V4022");
-    assert_eq!(parse(&stopped)["vCode"], "V4022");
-}
-
-fn parse(line: &str) -> serde_json::Value {
-    serde_json::from_str(line).unwrap()
 }
