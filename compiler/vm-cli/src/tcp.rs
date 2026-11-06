@@ -232,8 +232,9 @@ pub(crate) fn serve_tcp(
 ) -> Result<(), VmError> {
     let store = SlotStore::beside(path);
     let container = store.boot()?;
-    let (host, shell) = compose_host(container, ha_simulated_peer)?;
-    let device = Device::open(path)?;
+    let (mut host, shell) = compose_host(container, ha_simulated_peer)?;
+    let mut device = Device::open(path)?;
+    device.boot_application(&mut host);
 
     let listener = TcpListener::bind(addr).map_err(|err| {
         VmError::io(

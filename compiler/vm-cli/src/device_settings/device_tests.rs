@@ -95,7 +95,7 @@ fn open_when_new_device_then_file_text_is_the_documented_shape() {
 
     assert_eq!(
         fs::read_to_string(settings_path(&served)).unwrap(),
-        format!("{{\n  \"version\": 1,\n  \"deviceId\": \"{COUNTED_ID}\",\n  \"name\": \"ironplcvm\"\n}}\n")
+        format!("{{\n  \"version\": 1,\n  \"deviceId\": \"{COUNTED_ID}\",\n  \"name\": \"ironplcvm\",\n  \"retainedSavePeriod\": 0\n}}\n")
     );
 }
 
@@ -368,4 +368,77 @@ fn identity_view_when_read_from_another_thread_then_it_is_the_identity_of_the_de
     let seen = std::thread::spawn(move || view.identity()).join().unwrap();
 
     assert_eq!(seen, device.identity());
+}
+
+#[test]
+fn open_when_the_file_holds_a_save_period_then_the_device_has_it() {
+    let dir = TempDir::new().unwrap();
+    let served = served(&dir);
+    fs::write(
+        settings_path(&served),
+        format!("{{\"version\":1,\"deviceId\":\"{COUNTED_ID}\",\"retainedSavePeriod\":45}}"),
+    )
+    .unwrap();
+
+    let device = open_counting(&served);
+
+    assert_eq!(device.retained_save_period(), 45);
+}
+
+#[spec_test(REQ_VC_vm_cli_041)]
+#[rstest]
+#[case::negative("-1")]
+#[case::quoted("\"60\"")]
+#[case::fractional("1.5")]
+#[case::longer_than_a_day("86401")]
+fn open_when_the_save_period_is_not_acceptable_then_v6015_naming_the_field(#[case] value: &str) {
+    let dir = TempDir::new().unwrap();
+    let served = served(&dir);
+    fs::write(
+        settings_path(&served),
+        format!("{{\"version\":1,\"deviceId\":\"{COUNTED_ID}\",\"retainedSavePeriod\":{value}}}"),
+    )
+    .unwrap();
+
+    let err = Device::open_with(&served, &mut counting).err().unwrap();
+
+    assert_eq!(err.v_code(), "V6015");
+    assert!(err.to_string().contains("retainedSavePeriod"), "{err}");
+}
+
+#[test]
+fn change_when_the_save_period_is_set_then_the_file_holds_a_number_and_a_restart_keeps_it() {
+    let dir = TempDir::new().unwrap();
+    let served = served(&dir);
+    let mut device = open_counting(&served);
+
+    device
+        .change(&Entries::from([(
+            "retainedSavePeriod".to_string(),
+            json!(60),
+        )]))
+        .unwrap();
+
+    assert_eq!(device.retained_save_period(), 60);
+    assert_eq!(read_settings_file(&served)["retainedSavePeriod"], json!(60));
+    assert_eq!(open_counting(&served).retained_save_period(), 60);
+}
+
+#[spec_test(REQ_VC_vm_cli_041)]
+#[test]
+fn change_when_the_save_period_is_negative_then_v6015_and_the_period_is_unchanged() {
+    let dir = TempDir::new().unwrap();
+    let served = served(&dir);
+    let mut device = open_counting(&served);
+
+    let err = device
+        .change(&Entries::from([(
+            "retainedSavePeriod".to_string(),
+            json!(-5),
+        )]))
+        .unwrap_err();
+
+    assert_eq!(err.v_code(), "V6015");
+    assert_eq!(device.retained_save_period(), 0);
+    assert_eq!(read_settings_file(&served)["retainedSavePeriod"], json!(0));
 }

@@ -1,5 +1,6 @@
 //! The device settings file and the [`Device`] that holds the settings of one
-//! served process.
+//! served process, and what else the device keeps beside the application (the
+//! retained file, see [`keeps`]).
 //!
 //! The file is `<file>.device.json` beside the served container, next to the
 //! slot store's files. It is versioned JSON, and the keys are the keys of the
@@ -9,7 +10,8 @@
 //! {
 //!   "version": 1,
 //!   "deviceId": "0123456789abcdef0123456789abcdef",
-//!   "name": "ironplcvm"
+//!   "name": "ironplcvm",
+//!   "retainedSavePeriod": 0
 //! }
 //! ```
 //!
@@ -37,7 +39,11 @@ use ironplc_runtime::DeviceIdentity;
 
 use super::{os_random, DeviceSetting, DeviceSettings, Entries, Random, SettingsError};
 use crate::error::{self, VmError};
+use crate::retained_store::RetainedStore;
 use crate::slot_store::suffix;
+use crate::stored_item::BootResult;
+
+mod keeps;
 
 /// The only version of the file this device reads and writes.
 const FILE_VERSION: u64 = 1;
@@ -60,6 +66,23 @@ pub(crate) struct Device {
     /// The settings file; `None` is a device whose settings live in memory
     /// only (the tests of the session).
     file: Option<PathBuf>,
+    /// The other things the device keeps beside the application, and what it
+    /// did with them at boot; see [`keeps`].
+    kept: Kept,
+}
+
+/// What the device keeps across a restart besides its settings, and the facts
+/// about it that the `identity` answer reports. `None` for a device in memory.
+struct Kept {
+    /// The retained file beside the served container.
+    retained: Option<RetainedStore>,
+    /// What boot did with the retained file; `None` before boot, and for a
+    /// device that keeps no retained file.
+    retained_boot: Option<BootResult>,
+    /// The content hash of the application the device would boot, as the
+    /// session reports hashes. Set at boot and after each commit that reached
+    /// the slot store.
+    persisted_content_hash: Option<String>,
 }
 
 impl Device {
@@ -105,6 +128,11 @@ impl Device {
         Ok(Device {
             settings: Arc::new(Mutex::new(settings)),
             file: Some(path),
+            kept: Kept {
+                retained: Some(RetainedStore::beside(served)),
+                retained_boot: None,
+                persisted_content_hash: None,
+            },
         })
     }
 
@@ -123,6 +151,11 @@ impl Device {
                 DeviceSettings::resolve(&Entries::new(), &mut fixed).unwrap(),
             )),
             file: None,
+            kept: Kept {
+                retained: None,
+                retained_boot: None,
+                persisted_content_hash: None,
+            },
         }
     }
 
@@ -130,6 +163,12 @@ impl Device {
     /// [`DeviceSettings::identity`].
     pub(crate) fn identity(&self) -> DeviceIdentity {
         lock(&self.settings).identity()
+    }
+
+    /// How often the device writes the retained values while it runs, in
+    /// seconds; 0 is off. See [`DeviceSettings::retained_save_period`].
+    pub(crate) fn retained_save_period(&self) -> u64 {
+        lock(&self.settings).retained_save_period()
     }
 
     /// A handle that reads the identity of this device from other threads.
@@ -222,7 +261,7 @@ fn render(settings: &DeviceSettings) -> String {
     let mut text = format!("{{\n  \"version\": {FILE_VERSION}");
     for setting in DeviceSetting::ALL {
         let key = serde_json::Value::String(setting.key().to_owned());
-        let value = serde_json::Value::String(settings.get(*setting).to_owned());
+        let value = settings.get(*setting).to_json();
         text.push_str(&format!(",\n  {key}: {value}"));
     }
     text.push_str("\n}\n");

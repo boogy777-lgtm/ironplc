@@ -101,10 +101,11 @@ pub fn serve(path: &Path, ha_simulated_peer: bool) -> Result<(), VmError> {
     let container = store.boot()?;
     let (mut host, mut shell) = compose_host(container, ha_simulated_peer)?;
     let mut device = Device::open(path)?;
+    device.boot_application(&mut host);
 
     let stdin = io::stdin();
     let stdout = io::stdout();
-    serve_session(
+    let session = serve_session(
         &mut host,
         stdin.lock(),
         stdout.lock(),
@@ -117,7 +118,24 @@ pub fn serve(path: &Path, ha_simulated_peer: bool) -> Result<(), VmError> {
             error::SESSION_IO,
             format!("unable to read or write the command session: {err}"),
         )
-    })
+    });
+    stop_device(&mut device, &host, session)
+}
+
+/// The controlled stop of a served process: the end of its input. Writes the
+/// retained values (V6018 when it cannot), then returns the outcome of the
+/// session. A failed session is the error to report; a failed write is the
+/// error of a session that otherwise ended well, and is logged in both cases.
+pub(crate) fn stop_device(
+    device: &mut Device,
+    host: &RuntimeHost,
+    session: Result<(), VmError>,
+) -> Result<(), VmError> {
+    let stop = device.stopped(host);
+    if let Err(err) = &stop {
+        log::error!("retained values not written at the stop: {err}");
+    }
+    session.and(stop)
 }
 
 /// Boots the runtime host for `container`, mapping init traps to the
@@ -286,6 +304,12 @@ pub(crate) fn handle_line(
             let advances = advances_state(&command);
             let pair_notice = pair_notice_for(&command);
             let mut response = execute(command, host, &device.identity());
+            // The facts of the device's storage (what it would boot, what it
+            // did with the retained file at boot): the device owns them, the
+            // runtime layer leaves the fields empty.
+            if let Response::Identity(payload) = &mut response {
+                device.complete_identity(payload);
+            }
             // The ADR-0063 identity handshake answers the redundancy
             // block from the composed HA backend: present exactly when a
             // pair is configured, absent standalone — the field the
@@ -298,13 +322,14 @@ pub(crate) fn handle_line(
                 if let Some(err) = drive_scan_round(host, ha.as_deref_mut()) {
                     log::error!("driven scan round trapped: {err}");
                 }
+                device.scan_boundary(host);
             }
             let mut rendered: Option<String> = None;
             if acked && commits {
                 // ADR-0064 amendment: persist before the line renders, so
                 // a failure answers V6012 instead of an ack.
                 if let Some(store) = store {
-                    if let Err(err) = persist_commit(host, store) {
+                    if let Err(err) = commit_assembled(host, store, device) {
                         log::error!("assemble persistence failed: {err}");
                         rendered = Some(persist_error_line(&err));
                     }
@@ -510,14 +535,29 @@ pub(crate) fn persist_commit(host: &mut RuntimeHost, store: &mut SlotStore) -> R
     store.commit(&wire)
 }
 
-/// Renders the V6012 answer that replaces the assemble acknowledgment when
-/// the commit could not be persisted (ADR-0064 amendment). Built directly:
-/// V6012 is a shell code, not one of the runtime command layer's V40xx
-/// codes, so the typed `Response` cannot carry it.
+/// Persists an acknowledged assemble: the committed wire bytes through the slot
+/// store (V6012 when it cannot), then, once the device would boot the new
+/// application, the retained values of that application (V6018 when they cannot
+/// be written). Either error replaces the acknowledgment on the wire; the
+/// promotion in RAM stands in both cases.
+pub(crate) fn commit_assembled(
+    host: &mut RuntimeHost,
+    store: &mut SlotStore,
+    device: &mut Device,
+) -> Result<(), VmError> {
+    persist_commit(host, store)?;
+    device.assembled(host)
+}
+
+/// Renders the answer that replaces the assemble acknowledgment when the
+/// commit could not be persisted (ADR-0064 amendment): V6012 for the slot
+/// store, V6018 for the retained file. Built directly: these are shell codes,
+/// not the runtime command layer's V40xx codes, so the typed `Response`
+/// cannot carry them.
 fn persist_error_line(err: &VmError) -> String {
     serde_json::json!({
         "response": "error",
-        "vCode": error::SLOT_COMMIT_PERSIST,
+        "vCode": err.v_code(),
         "message": err.to_string(),
     })
     .to_string()

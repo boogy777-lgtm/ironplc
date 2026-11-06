@@ -249,6 +249,17 @@ Field set:
   a device that predates them omits them, and a client that does not know
   them ignores them, so adding them keeps the protocol version. The client
   compares `contentHash` with its download record (below).
+- `persistedContentHash` and `retained` — optional, next to `application`:
+  what the device keeps beside the application (REQ-VC-vm-cli-040).
+  `persistedContentHash` is the `contentHash` of the application the device
+  would boot, which differs from `application.contentHash` after a commit that
+  is live and not durable (`assembleEdits` answered V6012). `retained` says what
+  boot did with the retained file: `{"result":"applied"}`, `{"result":"absent"}`
+  or `{"result":"discarded","reason":...}` (`damaged`, `otherApplication`,
+  `otherRetainedLayout`). A client that does not know them ignores them, so
+  adding them keeps the protocol version. The type `BootNote` is the shape of
+  every item a device keeps across a restart: a new stored item adds one field
+  of that type.
 - `redundancy` — optional: `pairId`, configured `role`, ownership `epoch`,
   and the SYNC/CONTROL substates of
   [HA Redundancy FSM](ha-redundancy-fsm.md). Absent means standalone.
@@ -257,12 +268,15 @@ Field set:
 
 The device owns a few settings: values it persists and an operator can change
 in the settings file, and, when the setting allows it, online by the
-`setDeviceSettings` command. Today they are `deviceId` (the file only) and
-`name` (the file and the command); `ironplcvm serve` keeps them in
+`setDeviceSettings` command. Today they are `deviceId` (the file only),
+`name` (the file and the command) and `retainedSavePeriod` (the file and the
+command; seconds between the periodic writes of the retained values, 0 for
+off); `ironplcvm serve` keeps them in
 `<FILE>.device.json` beside the slot store
 ([vm-cli.md](vm-cli.md), REQ-VC-vm-cli-025 through REQ-VC-vm-cli-029). Each
 setting is one row of one table in `compiler/vm-cli/src/device_settings.rs`
-(key, first value, where it may be changed, check), and the settings file, the
+(key, first value, where it may be changed, check; the check also gives the
+type of the value, text or a whole number), and the settings file, the
 command and the `identity` answer all go through the rows. A device settings file that cannot be used stops
 the start (V6015) instead of giving the device a new identity.
 The id is how a workstation recognises a controller again and the key of the
