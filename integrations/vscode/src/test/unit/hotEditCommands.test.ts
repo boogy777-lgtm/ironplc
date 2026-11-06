@@ -3,7 +3,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * Drift guard for the hot-edit command surface: the command ids live in
+ * Drift guard for the hot-edit command surface, which is Sync Variable IDs
+ * (the edit itself is the online-edit dialog): the command id lives in
  * `package.json` and in the extension glue, and the structural-invariant
  * check requires every contributed command to appear in a test. Pinning both
  * sides here keeps the palette contributions and their registrations from
@@ -11,13 +12,6 @@ import * as path from 'path';
  */
 
 const HOT_EDIT_COMMANDS: { id: string; title: string }[] = [
-  { id: 'ironplc.startHotEditSession', title: 'Start Session' },
-  { id: 'ironplc.acceptEdits', title: 'Accept Edits' },
-  { id: 'ironplc.testEdits', title: 'Test Edits' },
-  { id: 'ironplc.untestEdits', title: 'Untest Edits' },
-  { id: 'ironplc.assembleEdits', title: 'Assemble Edits' },
-  { id: 'ironplc.cancelEdits', title: 'Cancel Edits' },
-  { id: 'ironplc.showHotEditStatus', title: 'Show Status' },
   { id: 'ironplc.syncVariableIds', title: 'Sync Variable IDs' },
 ];
 

@@ -86,14 +86,8 @@ suite('Extension Test Suite', () => {
   });
 
   for (const id of [
-    'ironplc.startHotEditSession',
-    'ironplc.acceptEdits',
-    'ironplc.testEdits',
-    'ironplc.untestEdits',
-    'ironplc.assembleEdits',
-    'ironplc.cancelEdits',
-    'ironplc.showHotEditStatus',
     'ironplc.syncVariableIds',
+    'ironplc.onlineEdit',
   ]) {
     test(`${id} command is registered`, async () => {
       const commands = await vscode.commands.getCommands(true);
