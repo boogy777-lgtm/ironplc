@@ -388,6 +388,7 @@ for its own per-message limit and a Rust client for its waits:
 |---------|---------|------------|
 | Connect timeout | 5 s | TCP connect or the `identity` round trip exceeds it during Connecting |
 | Response timeout | 30 s | A command's response frame does not arrive (headroom for a container upload in one frame) |
+| Close linger | 1 s | A side that closes waits this long for its peer to close too (`CLOSE_LINGER`). The device waits for a client that has been refused or dropped; a client waits for the device to release its one session, so that the next connection is not refused (V6014). The device frees the slot before it drops the socket, which is what makes the client's wait sufficient |
 | Heartbeat interval | 5 s | Idle Connected cadence: the client sends `getStatus` — the existing command, no new machinery — and a missing answer is a heartbeat miss |
 | Heartbeat tolerance | 2 consecutive misses | The second miss is a transport error and starts Reconnecting |
 
@@ -666,7 +667,7 @@ Everything reused, with its one authority:
 |-----------------|---------------|
 | Session protocol (commands, codec, dispatch) | `Command`, `Response`, `parse_command`, `render_command`, `parse_response`, `render_response`, `execute` in `compiler/runtime/src/commands.rs` |
 | stdio session server | `serve` in `compiler/vm-cli/src/serve.rs` |
-| Frame of the TCP transport, the connect and response timeouts | `read_frame`, `write_frame`, `FrameReader`, `FrameWriter`, `MAX_FRAME`, `CONNECT_TIMEOUT`, `RESPONSE_TIMEOUT` in `compiler/runtime/src/frame.rs`; the device's use in `compiler/vm-cli/src/tcp.rs` |
+| Frame of the TCP transport, the connect and response timeouts | `read_frame`, `write_frame`, `FrameReader`, `FrameWriter`, `MAX_FRAME`, `CONNECT_TIMEOUT`, `RESPONSE_TIMEOUT`, `CLOSE_LINGER` in `compiler/runtime/src/frame.rs`; the device's use in `compiler/vm-cli/src/tcp.rs` |
 | Codec error line (codeless, ADR-0055) | `codec_error_line` in `compiler/vm-cli/src/serve.rs` |
 | Client session (request FIFO, response parsing) | `HotEditSession`, `parseResponseLine`, `encodeRequest` in `integrations/vscode/src/hotEditSession.ts` |
 | Transport seam the TCP transport implements | `LineTransport` in `integrations/vscode-common/src/lineTransport.ts` (`HotEditTransport` in `integrations/vscode/src/hotEditSession.ts`; stdio impl: `StdioLineTransport` in the same shared module) |

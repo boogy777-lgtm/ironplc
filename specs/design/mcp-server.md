@@ -602,7 +602,7 @@ The hot-edit tools (`hot_edit_status`, `hot_edit_accept`, `hot_edit_test`, `hot_
 - `{address, port?}` — a TCP connection to the address; `port` is the session port (49152) when omitted.
 - `{device_id}` — the 32-digit id as `browse_network` reports it. The route is the one IronLink stores for this workstation (`routeList`). The route hint of a project's path file is not read: the server reads no file of the project (REQ-STL-mcp-006) and these tools have no project. An id without a route is an error that says to browse.
 
-A call is one session: connect, `identity`, the command, and a `getStatus` after an acknowledgement for the status snapshot, then the connection is dropped. The device serves one engineering session at a time.
+A call is one session: connect, `identity`, the command, and a `getStatus` after an acknowledgement for the status snapshot, then the session is closed gracefully, which returns once the device has released it ([REQ-SC-session-client-013](session-client.md)), so the next call is not refused as busy. The device serves one engineering session at a time.
 
 **REQ-TOL-mcp-170** Without `device` the hot-edit tools act on the in-process host exactly as before, and their responses have no `device` field.
 
@@ -613,6 +613,8 @@ A call is one session: connect, `identity`, the command, and a `getStatus` after
 **REQ-TOL-mcp-173** A device that cannot be reached (nothing listens, no answer in time, the connection ends) is returned as `ok: false` with a P8003 diagnostic that names the device and says why, and no `v_code`.
 
 **REQ-TOL-mcp-174** `device` must be `address` with an optional `port`, or `device_id`; any other combination is a P8001 diagnostic. An id is resolved by IronLink's route list; an id without a route is a P8001 diagnostic that says to browse, and IronLink missing or not answering is a P8002 diagnostic.
+
+**REQ-TOL-mcp-175** Calls that follow one another on the same device each find it free: a call ends its session before it returns, so two tool calls back to back are never refused with V6014 by the device's own previous session.
 
 ## Architecture
 

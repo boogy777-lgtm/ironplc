@@ -102,6 +102,28 @@ goes on. It is not a `CommandError`: every `CommandError` has a code.
 not start, a refused connection, an address that does not resolve) is
 `SessionError::Open` with the method that was tried.
 
+## Closing
+
+**REQ-SC-session-client-013** Closing a session ends it gracefully and returns
+once the device has released it, so a connection made right after is not refused
+as busy (V6014). A device admits one session at a time and frees the slot when it
+sees the end of the connection; a client that only drops its socket returns at
+once, and its next connection can arrive first. Every connection method
+implements `Channel::close` (a method without it does not compile) and calls it
+from its `Drop`, so a closed channel and a dropped session are the same:
+
+- `tcp` ends its output (`shutdown` of the write side), then reads and discards
+  until the device ends its own. The device releases its occupied flag before it
+  drops the socket (`serve_accepted` in `compiler/vm-cli/src/tcp.rs`), so the end
+  of its output means the slot is free. Both sites carry this invariant.
+- `stdio` closes the standard input of the program and waits for it to end,
+  discarding what it still writes.
+
+The wait is bounded by `CLOSE_LINGER` of `ironplc_runtime::frame`, the value the
+device puts on a client that closes, defined once. A device that does not let go
+within it is left (`tcp`) or stopped (`stdio`); the close never waits longer and
+never retries or pauses.
+
 ## Out of scope
 
 - The reconnect with backoff and the heartbeat of the editor's connection state

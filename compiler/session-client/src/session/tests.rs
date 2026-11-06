@@ -30,6 +30,8 @@ impl Channel for Scripted {
             .pop_front()
             .unwrap_or(Err(ChannelError::Closed(None)))
     }
+
+    fn close(&mut self) {}
 }
 
 /// A scripted channel and the list of lines it will have been sent.
