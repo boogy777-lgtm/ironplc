@@ -84,6 +84,23 @@ or else the route hint of the project.
 See :doc:`choose-controller` for the order in which the address is found, and for
 the status item that names the chosen controller.
 
+Run Controller and Stop Controller
+----------------------------------
+
+Starts or stops the scan of the connected controller. The commands compile
+nothing and leave an online edit where it is: they only send the ``startScan``
+or ``stopScan`` command of the session (see :doc:`/reference/runtime/ironplcvm`).
+
+:Menu Location: :menuselection:`Command Palette --> IronPLC: Run Controller`,
+   :menuselection:`Command Palette --> IronPLC: Stop Controller`
+
+The status item of the connection shows the run state the controller answered:
+``running``, ``stopped``, or ``faulted`` with the problem code. A faulted
+controller refuses Run with :doc:`V6019 </reference/runtime/problems/V6019>`;
+restart the device to clear the fault. These commands differ from the Run lens
+over a program, which compiles the program in the editor and runs it in the
+language server.
+
 Build Tasks
 ===========
 

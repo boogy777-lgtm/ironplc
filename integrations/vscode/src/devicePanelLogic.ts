@@ -10,6 +10,7 @@ import { ConnectionState } from './connectionState';
 import { formatStatusText, HotEditStatus, IdentityInfo } from './hotEditSession';
 import { BaselineState } from './baselineLogic';
 import { BuildPhase } from './buildLogic';
+import { ControllerRun } from './controllerRunLogic';
 
 /** One row of the device panel. */
 export interface PanelRow {
@@ -29,6 +30,11 @@ export interface DevicePanelModel {
   lastStatus: HotEditStatus | null;
   baseline: BaselineState;
   buildPhase: BuildPhase | null;
+  /**
+   * What the device last said about scanning in answer to Run or Stop; absent
+   * or null, the identity of the connection says (`currentRun`).
+   */
+  run?: ControllerRun | null;
   /** Information lines about the connected controller (not an error); absent or empty when there are none. */
   notes?: readonly string[];
 }

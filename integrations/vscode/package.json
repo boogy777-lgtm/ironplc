@@ -146,6 +146,16 @@
         "category": "IronPLC"
       },
       {
+        "command": "ironplc.runController",
+        "title": "Run Controller",
+        "category": "IronPLC"
+      },
+      {
+        "command": "ironplc.stopController",
+        "title": "Stop Controller",
+        "category": "IronPLC"
+      },
+      {
         "command": "ironplc.haRefresh",
         "title": "Refresh HA Status",
         "category": "IronPLC HA",

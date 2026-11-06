@@ -37,7 +37,24 @@ export type HotEditCommand
     | 'testEdits'
     | 'untestEdits'
     | 'assembleEdits'
-    | 'cancelEdits';
+    | 'cancelEdits'
+    | 'startScan'
+    | 'stopScan';
+
+/**
+ * Whether the device executes scan rounds (ADR-0086, Run and Stop). A device
+ * that faults reports `running` with a [`DeviceFault`]: the fault is reported
+ * apart from the run state.
+ */
+export type RunState = 'running' | 'stopped';
+
+/** The fault block of an `identity` response: why the device stopped scanning by itself. */
+export interface DeviceFault {
+  vCode: string;
+  message: string;
+  taskId: number;
+  instanceId: number;
+}
 
 /** One engineer decision for a shared-UID type change (ADR 0061). */
 export type MigrationDecision = 'init' | 'preserve';
@@ -133,6 +150,18 @@ export interface IdentityInfo {
   device: DeviceIdentity;
   application: HotEditStatus;
   redundancy?: RedundancyIdentity;
+  /**
+   * Whether the device scans. Absent from a device that predates the field,
+   * which runs; read it through `runStateOf`, which says so once.
+   */
+  runState?: RunState;
+  /** Present while the device is faulted. */
+  fault?: DeviceFault;
+}
+
+/** The run state of an identity: an absent field is `running`, what a device that predates it does. */
+export function runStateOf(identity: IdentityInfo): RunState {
+  return identity.runState ?? 'running';
 }
 
 /**
@@ -201,10 +230,11 @@ export function encodeRequest(
 type StatusResponse = { kind: 'status'; status: HotEditStatus };
 type IdentityResponse = { kind: 'identity'; identity: IdentityInfo };
 type AckResponse = { kind: 'ack' };
+type RunStateResponse = { kind: 'runState'; runState: RunState };
 type ErrorResponse = { kind: 'error'; error: HotEditProtocolError };
 
 /** The parsed answer to one command, before command-specific matching. */
-export type HotEditResponse = StatusResponse | IdentityResponse | AckResponse | ErrorResponse;
+export type HotEditResponse = StatusResponse | IdentityResponse | AckResponse | RunStateResponse | ErrorResponse;
 
 /**
  * Parses one response line (a single JSON value without its trailing
@@ -233,6 +263,13 @@ export function parseResponseLine(line: string): HotEditResponse {
   }
   if (record.response === 'ack') {
     return { kind: 'ack' };
+  }
+  if (record.response === 'runState') {
+    const runState = parseRunState(record.runState);
+    if (runState === undefined) {
+      throw new HotEditProtocolError(null, 'runState response is missing the run state');
+    }
+    return { kind: 'runState', runState };
   }
   if (record.response === 'error') {
     const vCode = typeof record.vCode === 'string' ? record.vCode : null;
@@ -352,6 +389,8 @@ function parseIdentity(record: Record<string, unknown>): IdentityInfo {
   if (typeof application !== 'object' || application === null) {
     throw new HotEditProtocolError(null, 'identity response is missing the application block');
   }
+  const runState = parseRunState(record.runState);
+  const fault = parseFault(record.fault);
   return {
     protocol: record.protocol,
     device: {
@@ -363,7 +402,44 @@ function parseIdentity(record: Record<string, unknown>): IdentityInfo {
     },
     application: parseStatus(application as Record<string, unknown>),
     redundancy: parseRedundancy(record.redundancy),
+    ...(runState !== undefined ? { runState } : {}),
+    ...(fault !== undefined ? { fault } : {}),
   };
+}
+
+/**
+ * Reads an optional run state: absent means a device that does not report it,
+ * so the result is undefined; present, it is one of the two states.
+ */
+function parseRunState(value: unknown): RunState | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (value !== 'running' && value !== 'stopped') {
+    throw new HotEditProtocolError(null, 'response carries a malformed runState');
+  }
+  return value;
+}
+
+/** Reads the optional fault block of an `identity` response; absent means no fault. */
+function parseFault(value: unknown): DeviceFault | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== 'object') {
+    throw new HotEditProtocolError(null, 'identity response carries a malformed fault block');
+  }
+  const record = value as Record<string, unknown>;
+  const { vCode, message, taskId, instanceId } = record;
+  if (
+    typeof vCode !== 'string'
+    || typeof message !== 'string'
+    || typeof taskId !== 'number'
+    || typeof instanceId !== 'number'
+  ) {
+    throw new HotEditProtocolError(null, 'identity response carries a malformed fault block');
+  }
+  return { vCode, message, taskId, instanceId };
 }
 
 /**
@@ -555,6 +631,20 @@ export class HotEditSession {
     await this.request('cancelEdits');
   }
 
+  /**
+   * Starts the scan of the device (ADR-0086). Answers the run state the
+   * command left; a faulted device refuses with V6019 and a host without a
+   * scan loop with V4022, as a coded `HotEditProtocolError`.
+   */
+  async startScan(): Promise<RunState> {
+    return this.scanCommand('startScan');
+  }
+
+  /** Stops the scan of the device; answers the run state the command left. */
+  async stopScan(): Promise<RunState> {
+    return this.scanCommand('stopScan');
+  }
+
   /** The HA pair overview (haStatus): both units' chart states, the
    * TakeoverReady verdict with its inputs, and the active alarm flags. */
   async haStatus(): Promise<HaStatus> {
@@ -649,6 +739,15 @@ export class HotEditSession {
       throw new HotEditProtocolError(null, `unexpected ${response.kind} response to ${command}`);
     }
     return response as Extract<HaResponse, { kind: K }>;
+  }
+
+  /** Sends one scan command and returns the run state of its `runState` answer. */
+  private async scanCommand(command: 'startScan' | 'stopScan'): Promise<RunState> {
+    const response = await this.request(command);
+    if (response.kind !== 'runState') {
+      throw new HotEditProtocolError(null, `unexpected ${response.kind} response to ${command}`);
+    }
+    return response.runState;
   }
 
   private async request(

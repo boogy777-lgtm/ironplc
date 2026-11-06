@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { connectionTransports } from '../connectionMethods';
+import { SCAN_ACTIONS, scanActionNames } from '../controllerRunLogic';
 import { DEFAULT_SESSION_PORT, SUPPORTED_SESSION_PROTOCOL } from '../sessionConstants';
 import { findGatewayViolations, HANDOFF_ACTIONS, handoffNames } from '../vscodeCommon';
 
@@ -48,6 +49,25 @@ for (const name of handoffNames()) {
   const command = HANDOFF_ACTIONS[name].command;
   if (!packageJson.contributes.commands.some((cmd: { command: string }) => cmd.command === command)) {
     failures.push(`Handoff action '${name}' names the command '${command}', which package.json does not contribute`);
+  }
+}
+
+// Every command of the class that changes whether the connected controller scans
+// (the table SCAN_ACTIONS, which controllerRunCommands.ts registers member by
+// member) is contributed with the title the table gives it and is named in the
+// README, which lists the commands for the person who reads it.
+const readme = fs.readFileSync(path.join(__dirname, '..', '..', 'README.md'), 'utf-8');
+for (const name of scanActionNames()) {
+  const { commandId, title } = SCAN_ACTIONS[name];
+  const contributed = packageJson.contributes.commands.find((cmd: { command: string }) => cmd.command === commandId);
+  if (contributed === undefined) {
+    failures.push(`Scan action '${name}' names the command '${commandId}', which package.json does not contribute`);
+  }
+  else if (contributed.title !== title) {
+    failures.push(`Scan action '${name}' is titled '${title}', but package.json titles '${commandId}' '${contributed.title}'`);
+  }
+  if (!readme.includes(`**IronPLC: ${title}**`)) {
+    failures.push(`README.md does not name the command '${title}' of the scan action '${name}'`);
   }
 }
 
