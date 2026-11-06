@@ -3,7 +3,7 @@
 use super::*;
 use crate::test_support::{assert_trap, single_function_container, steel_thread_container};
 use crate::VmBuffers;
-use ironplc_container::ContainerBuilder;
+use ironplc_container::{ContainerBuilder, TaskType};
 
 #[test]
 fn vm_load_when_valid_container_then_returns_ready() {
@@ -375,4 +375,91 @@ fn uptime_when_round_advances_then_follows_the_clock() {
     assert_eq!(vm.uptime(), Duration::from_millis(1));
     vm.run_round(7_500).unwrap();
     assert_eq!(vm.uptime(), Duration::from_micros(7_500));
+}
+
+/// A container with one enabled cyclic task of `interval_us` whose program
+/// returns at once.
+fn cyclic_container(interval_us: u64) -> Container {
+    use ironplc_container::{ProgramInstanceEntry, TaskEntry};
+
+    ContainerBuilder::new()
+        .num_variables(0)
+        .add_function(FunctionId::INIT, &[0x8C], 0, 0, 0)
+        .add_function(FunctionId::SCAN, &[0x8C], 0, 0, 0)
+        .add_task(TaskEntry {
+            task_id: TaskId::DEFAULT,
+            priority: 0,
+            task_type: TaskType::Cyclic,
+            flags: 0x01,
+            interval_us,
+            single_var_index: VarIndex::NO_SINGLE_VAR,
+            watchdog_us: 0,
+            input_image_offset: 0,
+            output_image_offset: 0,
+            reserved: [0; 4],
+        })
+        .add_program_instance(ProgramInstanceEntry {
+            instance_id: InstanceId::DEFAULT,
+            task_id: TaskId::DEFAULT,
+            entry_function_id: FunctionId::SCAN,
+            var_table_offset: 0,
+            var_table_count: 0,
+            fb_instance_offset: 0,
+            fb_instance_count: 0,
+            init_function_id: FunctionId::INIT,
+        })
+        .init_function_id(FunctionId::INIT)
+        .entry_function_id(FunctionId::SCAN)
+        .max_call_depth(1)
+        .build()
+}
+
+#[test]
+fn vm_load_when_buffers_hold_a_deadline_then_task_starts_ready_again() {
+    let c = cyclic_container(1_000);
+    let mut b = VmBuffers::from_container(&c);
+    Vm::new()
+        .load(&c, &mut b)
+        .unwrap()
+        .start()
+        .unwrap()
+        .run_round(0)
+        .unwrap();
+    assert_eq!(b.tasks[0].next_due_us, 1_000);
+
+    let ready = Vm::new().load(&c, &mut b).unwrap().resume(1);
+
+    assert_eq!(ready.next_due_us(), Some(0));
+}
+
+#[test]
+fn vm_load_continuing_when_buffers_hold_a_deadline_then_deadline_and_counters_stay() {
+    let c = cyclic_container(1_000);
+    let mut b = VmBuffers::from_container(&c);
+    Vm::new()
+        .load(&c, &mut b)
+        .unwrap()
+        .start()
+        .unwrap()
+        .run_round(0)
+        .unwrap();
+
+    let mut vm = Vm::new().load_continuing(&c, &mut b).unwrap().resume(1);
+
+    assert_eq!(vm.next_due_us(), Some(1_000));
+    vm.run_round(1_000).unwrap();
+    assert_eq!(vm.next_due_us(), Some(2_000));
+    assert_eq!(b.tasks[0].scan_count, 2);
+    assert_eq!(b.tasks[0].overrun_count, 0);
+}
+
+#[test]
+fn vm_load_continuing_when_call_depth_is_zero_then_trap_before_any_write() {
+    let mut c = cyclic_container(1_000);
+    c.header.max_call_depth = 0;
+    let mut b = VmBuffers::from_container(&c);
+
+    let err = Vm::new().load_continuing(&c, &mut b).err().unwrap();
+
+    assert_eq!(err, Trap::ZeroCallDepth);
 }

@@ -16,6 +16,19 @@ pub struct TaskState {
     pub overrun_count: u64,
 }
 
+/// The earliest `next_due_us` across the enabled cyclic tasks of `task_states`,
+/// or `None` when there is none (a program of freewheeling tasks only).
+///
+/// The one place that answers "when is the next cyclic deadline": the running
+/// VM and the runtime host both ask it.
+pub fn earliest_due_us(task_states: &[TaskState]) -> Option<u64> {
+    task_states
+        .iter()
+        .filter(|t| t.enabled && t.task_type == TaskType::Cyclic)
+        .map(|t| t.next_due_us)
+        .min()
+}
+
 /// Per-program-instance runtime state.
 #[derive(Clone, Debug, Default)]
 pub struct ProgramInstanceState {
@@ -111,11 +124,7 @@ impl<'a> TaskScheduler<'a> {
     /// or `None` if no cyclic tasks exist.
     #[cfg(test)]
     pub fn next_due_us(&self) -> Option<u64> {
-        self.task_states
-            .iter()
-            .filter(|t| t.enabled && t.task_type == TaskType::Cyclic)
-            .map(|t| t.next_due_us)
-            .min()
+        earliest_due_us(self.task_states)
     }
 }
 

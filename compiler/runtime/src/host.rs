@@ -39,7 +39,7 @@ use std::collections::BTreeMap;
 
 use ironplc_container::integrity::HASH_LEN;
 use ironplc_container::{Container, InstanceId, TaskId, VarIndex};
-use ironplc_vm::{FaultContext, Vm, VmBuffers};
+use ironplc_vm::{earliest_due_us, FaultContext, Vm, VmBuffers};
 
 use crate::edit_guard::{edit_guard, edit_state, EditCommand, EditState};
 use crate::error::{OnlineChangeError, RuntimeError};
@@ -169,6 +169,18 @@ fn select_active<'a>(
     } else {
         normal
     }
+}
+
+/// What a call that drives rounds does with the deadlines of the cyclic tasks
+/// when its session of rounds starts.
+#[derive(Clone, Copy)]
+enum Deadlines {
+    /// Every task is ready at the start: the call runs each task once at the
+    /// clock it is given (the driven round of `run`).
+    Restart,
+    /// The tasks keep the deadlines and counters the previous round left (the
+    /// rounds of a paced driver).
+    Keep,
 }
 
 /// Owns the active artifact, a staged candidate, and the VM's state.
@@ -655,8 +667,50 @@ impl RuntimeHost {
     pub fn run_with_commit(
         &mut self,
         rounds: u64,
+        clock: impl FnMut() -> u64,
+        on_commit: impl FnMut(ScanCommit),
+    ) -> Result<(), RuntimeError> {
+        self.run_rounds(rounds, clock, on_commit, Deadlines::Restart)
+    }
+
+    /// Runs one round of a paced scan at `uptime_us` and invokes `on_commit`
+    /// for the boundary, like [`run_with_commit`](Self::run_with_commit), but
+    /// the cyclic tasks keep the deadlines the previous round set.
+    ///
+    /// A call of `run` starts every task ready ([`Deadlines::Restart`]), which
+    /// is what a driven round at a constant clock needs. A driver that paces
+    /// the rounds on a real clock calls this once per round: the task state is
+    /// not reset between the calls, so a task keeps its period and
+    /// [`next_due_us`](Self::next_due_us) is the deadline the driver waits for.
+    /// A swap applied at the start of the round rebuilds the task state, so
+    /// the tasks of the swapped-in artifact run in that round.
+    pub fn run_paced_round(
+        &mut self,
+        uptime_us: u64,
+        on_commit: impl FnMut(ScanCommit),
+    ) -> Result<(), RuntimeError> {
+        self.run_rounds(1, || uptime_us, on_commit, Deadlines::Keep)
+    }
+
+    /// The uptime of the earliest deadline of an enabled cyclic task of the
+    /// artifact that executes, or `None` when it has none (a program of
+    /// freewheeling tasks only): the time a paced driver waits for.
+    pub fn next_due_us(&self) -> Option<u64> {
+        earliest_due_us(&self.buffers.tasks)
+    }
+
+    /// Whether the host holds the execution permit: the host drives scan
+    /// rounds only while it does.
+    pub fn execution_permitted(&self) -> bool {
+        self.execution_permitted
+    }
+
+    fn run_rounds(
+        &mut self,
+        rounds: u64,
         mut clock: impl FnMut() -> u64,
         mut on_commit: impl FnMut(ScanCommit),
+        deadlines: Deadlines,
     ) -> Result<(), RuntimeError> {
         let mut remaining = rounds;
         while remaining > 0 {
@@ -670,7 +724,7 @@ impl RuntimeHost {
             if !self.execution_permitted {
                 return Err(RuntimeError::NotPermitted);
             }
-            remaining = self.run_session(remaining, &mut clock, &mut on_commit)?;
+            remaining = self.run_session(remaining, &mut clock, &mut on_commit, deadlines)?;
         }
         Ok(())
     }
@@ -689,6 +743,7 @@ impl RuntimeHost {
         mut remaining: u64,
         clock: &mut impl FnMut() -> u64,
         on_commit: &mut impl FnMut(ScanCommit),
+        deadlines: Deadlines,
     ) -> Result<u64, RuntimeError> {
         let (container, mode, generation) = if self.active_is_candidate {
             let Some(candidate) = self.candidate.as_ref() else {
@@ -707,10 +762,11 @@ impl RuntimeHost {
         let application = self.application_generation;
 
         let mut completed = self.rounds;
-        let mut vm = Vm::new()
-            .load(container, &mut self.buffers)
-            .map_err(load_trap)?
-            .resume(completed);
+        let ready = match deadlines {
+            Deadlines::Restart => Vm::new().load(container, &mut self.buffers),
+            Deadlines::Keep => Vm::new().load_continuing(container, &mut self.buffers),
+        };
+        let mut vm = ready.map_err(load_trap)?.resume(completed);
         while remaining > 0 {
             vm.run_round(clock()).map_err(RuntimeError::Trap)?;
             remaining -= 1;
