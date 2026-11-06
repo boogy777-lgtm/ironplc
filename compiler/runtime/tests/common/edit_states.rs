@@ -104,4 +104,3 @@ pub fn host_in(state: State) -> RuntimeHost {
     }
     host
 }
-

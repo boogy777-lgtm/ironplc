@@ -17,8 +17,8 @@ mod common;
 
 use common::{compile_with_ids, container_bytes, counter_host, counter_program, variable_index};
 use ironplc_runtime::{
-    execute, parse_command, Command, DeviceIdentity, HostMode, IdentityPayload, Response, RunState,
-    RuntimeHost, StatusPayload, SESSION_PROTOCOL_VERSION,
+    edit_view, execute, parse_command, Command, DeviceIdentity, HostMode, IdentityPayload,
+    Response, RunState, RuntimeHost, StatusPayload, SESSION_PROTOCOL_VERSION,
 };
 
 /// The device block composed for the acceptance tests' soft device.
@@ -443,6 +443,40 @@ fn cancel_edits_when_candidate_staged_then_pending_edit_block_gone() {
 }
 
 #[test]
+fn get_status_when_fresh_host_then_json_carries_the_edit_view_of_an_idle_device() {
+    let (mut host, _counter) = counter_host(1);
+
+    let response = run_line(&mut host, r#"{"command":"getStatus"}"#);
+
+    assert_eq!(response["edit"]["stage"], "idle");
+    assert_eq!(response["edit"]["next"]["command"], "accept");
+    assert_eq!(response["edit"]["commands"]["accept"]["enabled"], true);
+    assert_eq!(response["edit"]["commands"]["cancel"]["enabled"], false);
+    assert_eq!(
+        response["edit"]["commands"]["cancel"]["reason"]["code"],
+        "V4012"
+    );
+}
+
+#[test]
+fn get_status_when_candidate_staged_then_the_edit_view_follows_the_host() {
+    let (mut host, _counter) = counter_host(1);
+    run_line(
+        &mut host,
+        &accept_line(&counter_program("Counter := Counter + 10;")),
+    );
+
+    let response = run_line(&mut host, r#"{"command":"getStatus"}"#);
+
+    assert_eq!(response["edit"]["stage"], "accepted");
+    assert_eq!(response["edit"]["next"]["command"], "test");
+    assert_eq!(
+        response["edit"]["commands"]["accept"]["reason"]["code"],
+        "V4013"
+    );
+}
+
+#[test]
 fn get_status_when_fresh_host_then_normal_generation_one_and_no_candidate() {
     let (mut host, _counter) = counter_host(1);
     let (content_hash, layout_hash) = header_hashes("Counter := Counter + 1;");
@@ -462,6 +496,7 @@ fn get_status_when_fresh_host_then_normal_generation_one_and_no_candidate() {
             pending_edit: None,
             content_hash: Some(content_hash),
             layout_hash: Some(layout_hash),
+            edit: Some(edit_view(&host.status())),
         })
     );
 }
@@ -619,6 +654,7 @@ fn identity_when_fresh_host_then_device_panel_and_live_status_snapshot() {
                 pending_edit: None,
                 content_hash: Some(content_hash),
                 layout_hash: Some(layout_hash),
+                edit: Some(edit_view(&host.status())),
             },
             redundancy: None,
             persisted_content_hash: None,

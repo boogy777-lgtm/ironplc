@@ -14,6 +14,7 @@
 mod commands;
 mod conversion;
 mod edit_guard;
+mod edit_view;
 mod error;
 pub mod frame;
 mod generation;
@@ -34,6 +35,10 @@ pub use commands::{
     CommandError, DeviceIdentity, EditSpec, FaultNote, IdentityPayload, MigrationDecisionSpec,
     RedundancyIdentity, Response, RunState, StatusPayload, TypeChangeDetail, DEFAULT_SESSION_PORT,
     SESSION_PROTOCOL_VERSION,
+};
+pub use edit_guard::EditCommand;
+pub use edit_view::{
+    edit_view, CommandView, Commands, EditStage, EditView, FinalizeAll, NextCommand, Reason,
 };
 pub use error::{OnlineChangeError, RuntimeError};
 pub use generation::{ApplicationGeneration, LogicGeneration};

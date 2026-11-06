@@ -146,6 +146,7 @@ fn identity_response_of(
             pending_edit: None,
             content_hash: None,
             layout_hash: None,
+            edit: None,
         },
         redundancy,
         persisted_content_hash: None,
@@ -317,6 +318,7 @@ fn render_response_when_status_then_serializes_every_field() {
         pending_edit: None,
         content_hash: None,
         layout_hash: None,
+        edit: None,
     });
 
     let line = render_response(&response).unwrap();
@@ -356,6 +358,29 @@ fn status_payload_when_hashes_and_unknown_field_present_then_parses() {
 
     assert_eq!(status.content_hash.as_deref(), Some("ab"));
     assert_eq!(status.layout_hash.as_deref(), Some("cd"));
+}
+
+#[test]
+fn status_payload_when_edit_absent_then_parses_with_none_and_renders_without_it() {
+    let status: StatusPayload = serde_json::from_str(STATUS_WITHOUT_HASHES).unwrap();
+
+    let line = render_response(&Response::Status(status.clone())).unwrap();
+
+    assert_eq!(status.edit, None);
+    assert!(!line.contains("\"edit\""));
+}
+
+#[test]
+fn status_payload_when_edit_view_present_then_round_trips_through_the_wire() {
+    let mut payload: StatusPayload = serde_json::from_str(STATUS_WITHOUT_HASHES).unwrap();
+    payload.edit = Some(crate::edit_view::view_of(
+        crate::edit_guard::EditState::Testing { migration: true },
+    ));
+
+    let line = render_response(&Response::Status(payload.clone())).unwrap();
+
+    assert!(line.contains(r#""edit":{"#));
+    assert_eq!(parse_response(&line).unwrap(), Response::Status(payload));
 }
 
 #[test]
@@ -510,6 +535,7 @@ fn redundancy_block() -> RedundancyIdentity {
     pending_edit: None,
     content_hash: Some("9f".repeat(32)),
     layout_hash: Some("3c".repeat(32)),
+    edit: None,
 }))]
 #[case::run_state_running(Response::RunState { run_state: RunState::Running })]
 #[case::run_state_stopped(Response::RunState { run_state: RunState::Stopped })]
