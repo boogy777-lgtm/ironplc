@@ -53,6 +53,7 @@ END_PROGRAM
 const TEST: &str = r#"{"command":"testEdits"}"#;
 const UNTEST: &str = r#"{"command":"untestEdits"}"#;
 const ASSEMBLE: &str = r#"{"command":"assembleEdits"}"#;
+const CANCEL: &str = r#"{"command":"cancelEdits"}"#;
 const IDENTITY: &str = r#"{"command":"identity"}"#;
 const STATUS: &str = r#"{"command":"getStatus"}"#;
 const START: &str = r#"{"command":"startScan"}"#;
@@ -209,6 +210,45 @@ fn step_when_test_untest_and_assemble_then_each_is_answered_after_its_boundary()
     assert_eq!(status_assembled["mode"], "normal");
     assert_eq!(status_assembled["normal"], 2);
     assert_eq!(status_assembled["candidate"], serde_json::Value::Null);
+}
+
+/// Cancel while the candidate executes is one command with two steps: untest
+/// and cancel. It is answered after the boundary that applied the revert and
+/// discarded the candidate, and not before.
+#[spec_test(REQ_VC_vm_cli_023)]
+#[test]
+fn step_when_cancel_requested_under_test_then_answered_after_the_boundary_that_ended_the_edit() {
+    let mut rig = Rig::over(compile_container(&cyclic_source(1, "T#10s")));
+    rig.steps(1);
+    rig.ask(&accept_line(&cyclic_source(10, "T#10s")));
+    rig.ask(TEST);
+    let before = rig.rounds();
+    let answer = rig.send(CANCEL);
+    assert!(answer.try_recv().is_err());
+
+    rig.steps(1);
+
+    assert_eq!(parsed(&answer)["response"], "ack");
+    assert_eq!(rig.rounds(), before + 1);
+    let status = rig.ask(STATUS);
+    assert_eq!(status["mode"], "normal");
+    assert_eq!(status["candidate"], serde_json::Value::Null);
+    assert_eq!(status["edit"]["stage"], "idle");
+}
+
+/// Cancel before Test takes effect at once: it has no swap to wait for.
+#[spec_test(REQ_VC_vm_cli_023)]
+#[test]
+fn step_when_cancel_requested_before_test_then_answered_without_a_round() {
+    let mut rig = Rig::over(compile_container(&cyclic_source(1, "T#10s")));
+    rig.steps(1);
+    rig.ask(&accept_line(&cyclic_source(10, "T#10s")));
+    let before = rig.rounds();
+
+    let cancelled = rig.ask(CANCEL);
+
+    assert_eq!(cancelled["response"], "ack");
+    assert_eq!(rig.rounds(), before);
 }
 
 #[spec_test(REQ_VC_vm_cli_043)]

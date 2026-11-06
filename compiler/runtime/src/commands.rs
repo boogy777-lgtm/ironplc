@@ -18,7 +18,7 @@ use ironplc_container::Container;
 use serde::{Deserialize, Serialize};
 
 use crate::conversion::type_name;
-use crate::edit_view::{edit_view, EditView};
+use crate::edit_view::{edit_view, EditStage, EditView};
 use crate::error::OnlineChangeError;
 use crate::host::{AcceptedEdit, HostMode, HostStatus, PendingEditRecord, RuntimeHost};
 use crate::migration::{MigrationDecision, MigrationError, TypeChangePair};
@@ -360,6 +360,14 @@ pub struct IdentityPayload {
     /// that keeps no retained image.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub retained: Option<BootNote>,
+    /// The unfinished edit that the previous run of the device left when it
+    /// stopped: present exactly when the device found the note of an edit at
+    /// boot. A candidate lives in RAM only, so a restart loses a staged or
+    /// tested candidate and the device boots the assembled application; the
+    /// engineer repeats the edit. Absent when no edit was unfinished and from a
+    /// device that predates the field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub candidate_lost: Option<CandidateLost>,
     /// The fault of the application, present exactly while the device is
     /// faulted: a scan round trapped, and the device runs no further round
     /// until it is restarted. Every command is still answered. Absent from a
@@ -408,6 +416,26 @@ pub struct FaultNote {
     pub task_id: u16,
     /// The program instance that was running.
     pub instance_id: u16,
+}
+
+/// The note of an edit that a restart lost (owner decision: a candidate is kept
+/// in RAM only). It says whose edit it was and how far it had come, so the
+/// engineer knows what to repeat.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CandidateLost {
+    /// The edit label of the accept that staged the candidate, when it named
+    /// one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// The advisory client label of that accept, when it carried one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<String>,
+    /// How far the edit had come: `accepted`, `testing` or `testingMigration`.
+    /// Absent when the note itself was damaged and an edit is known to have
+    /// been lost and nothing more.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stage: Option<EditStage>,
 }
 
 /// What a device did at boot with one item it keeps across a restart: the
@@ -541,7 +569,7 @@ impl From<OnlineChangeError> for CommandError {
             OnlineChangeError::MigrationUnsupported(ref cause) => cause.v_code(),
             OnlineChangeError::UntestUnsupported => problem_codes::UNTEST_UNSUPPORTED,
             OnlineChangeError::NoCandidateStaged => problem_codes::NO_CANDIDATE_STAGED,
-            OnlineChangeError::CandidateAlreadyStaged => problem_codes::CANDIDATE_ALREADY_STAGED,
+            OnlineChangeError::CandidateAlreadyStaged(_) => problem_codes::CANDIDATE_ALREADY_STAGED,
             OnlineChangeError::NoTestInProgress => problem_codes::NO_TEST_IN_PROGRESS,
             OnlineChangeError::NotAllowedInThisMode => problem_codes::NOT_ALLOWED_IN_THIS_MODE,
             OnlineChangeError::AssembleWithoutTest => problem_codes::ASSEMBLE_WITHOUT_TEST,
@@ -607,6 +635,7 @@ pub fn execute(command: Command, host: &mut RuntimeHost, device: &DeviceIdentity
             redundancy: None,
             persisted_content_hash: None,
             retained: None,
+            candidate_lost: None,
             fault: None,
             run_state: RunState::default(),
         })),

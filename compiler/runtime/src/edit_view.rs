@@ -15,10 +15,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::commands::CommandError;
 use crate::edit_guard::{
-    edit_guard, EditCommand, EditState, FINALIZE_ALL_LABEL, FINALIZE_ALL_STEPS,
+    edit_answer, EditCommand, EditState, Steps, FINALIZE_ALL_LABEL, FINALIZE_ALL_STEPS,
 };
 use crate::error::OnlineChangeError;
-use crate::host::HostStatus;
+use crate::host::{HostStatus, PendingEditRecord};
 
 /// Where the unfinished edit stands, in the words a client shows.
 ///
@@ -73,30 +73,28 @@ pub struct CommandView {
     /// Why the command is not allowed. Absent when it is.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<Reason>,
+    /// The commands that make up this one, in order; absent for a command that
+    /// is a single operation. For an edit command it is what the device runs
+    /// for the one command the client sends (Cancel while the candidate
+    /// executes is untest, then cancel). For `finalizeAll` it is what the
+    /// client runs, one command after the other.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub steps: Vec<EditCommand>,
 }
 
 impl CommandView {
     /// The view of a command that the table answers with `answer`.
-    fn new(label: &str, answer: Result<(), OnlineChangeError>) -> Self {
+    fn new(label: &str, answer: Result<Steps, OnlineChangeError>) -> Self {
         CommandView {
             enabled: answer.is_ok(),
             label: label.to_string(),
+            steps: answer
+                .as_ref()
+                .map(|steps| steps.to_vec())
+                .unwrap_or_default(),
             reason: answer.err().map(Reason::from),
         }
     }
-}
-
-/// The composite command "finalize all": the client runs the `steps` in
-/// order. It is enabled when the first step is, and carries the reason of
-/// that step when not.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FinalizeAll {
-    /// The enablement, label and reason, as for any command.
-    #[serde(flatten)]
-    pub view: CommandView,
-    /// The commands to run, in order.
-    pub steps: Vec<EditCommand>,
 }
 
 /// Every command of the view: the five edit commands, keyed by their wire
@@ -107,8 +105,8 @@ pub struct Commands {
     /// The edit commands. A new [`EditCommand`] is a new key.
     #[serde(flatten)]
     pub edit: BTreeMap<EditCommand, CommandView>,
-    /// The composite command.
-    pub finalize_all: FinalizeAll,
+    /// The composite command; its `steps` are always present.
+    pub finalize_all: CommandView,
 }
 
 /// The command that the Next item of a client runs.
@@ -133,7 +131,17 @@ pub struct EditView {
     /// pending (`stage` says so): there is nothing to run until the boundary.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next: Option<NextCommand>,
+    /// What the engineer should know about the edit as it stands. Present
+    /// while a candidate exists: it lives in RAM only, and a restart of the
+    /// device loses it ([`CANDIDATE_LOST_WARNING`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub warning: Option<String>,
 }
+
+/// The warning of an edit with a candidate, defined once. The candidate is not
+/// kept across a restart (owner decision): the device boots the assembled
+/// application and its boot note says the candidate was lost.
+pub const CANDIDATE_LOST_WARNING: &str = "a restart of the device loses this candidate";
 
 /// The stage of an edit state. Exhaustive: a new state does not compile until
 /// it is named here.
@@ -149,6 +157,18 @@ fn stage(state: EditState) -> EditStage {
     }
 }
 
+/// The warning that goes with a stage. Exhaustive: a new stage does not
+/// compile until it says whether it has a candidate to lose.
+fn warning(stage: EditStage) -> Option<&'static str> {
+    match stage {
+        EditStage::Idle => None,
+        EditStage::Accepted
+        | EditStage::Testing
+        | EditStage::TestingMigration
+        | EditStage::SwapPending => Some(CANDIDATE_LOST_WARNING),
+    }
+}
+
 /// The command that moves the edit from `state` towards its end: accept a
 /// candidate, test it, assemble it. A pending swap has none. Exhaustive: a new
 /// state does not compile until it is named here.
@@ -161,40 +181,39 @@ fn next_command(state: EditState) -> Option<EditCommand> {
     }
 }
 
-/// The view of an edit state.
-pub(crate) fn view_of(state: EditState) -> EditView {
+/// The view of an edit state. `pending` is the record of the staged edit, which
+/// the refusal about a staged candidate names (see [`edit_answer`]).
+pub(crate) fn view_of(state: EditState, pending: Option<&PendingEditRecord>) -> EditView {
     let edit = EditCommand::ALL
         .into_iter()
         .map(|command| {
             (
                 command,
-                CommandView::new(command.label(), edit_guard(state, command)),
+                CommandView::new(command.label(), edit_answer(state, command, pending)),
             )
         })
         .collect();
     // The composite row is enabled when its first step is. The pattern is
     // irrefutable: the row has at least one step by its type.
     let [first, ..] = FINALIZE_ALL_STEPS;
+    let mut finalize_all = CommandView::new(FINALIZE_ALL_LABEL, edit_answer(state, first, pending));
+    finalize_all.steps = FINALIZE_ALL_STEPS.to_vec();
+    let stage = stage(state);
     EditView {
-        stage: stage(state),
-        commands: Commands {
-            edit,
-            finalize_all: FinalizeAll {
-                view: CommandView::new(FINALIZE_ALL_LABEL, edit_guard(state, first)),
-                steps: FINALIZE_ALL_STEPS.to_vec(),
-            },
-        },
+        stage,
+        commands: Commands { edit, finalize_all },
         next: next_command(state).map(|command| NextCommand {
             command,
             label: command.label().to_string(),
         }),
+        warning: warning(stage).map(str::to_string),
     }
 }
 
 /// The edit view of a host status: which edit commands the host allows and,
 /// for each one it does not, why.
 pub fn edit_view(status: &HostStatus) -> EditView {
-    view_of(status.edit_state)
+    view_of(status.edit_state, status.pending_edit.as_ref())
 }
 
 #[cfg(test)]
@@ -209,12 +228,10 @@ mod tests {
         pending: Option<PendingSwap>,
         migration: bool,
     ) -> EditView {
-        view_of(edit_state(
-            candidate_staged,
-            active_is_candidate,
-            pending,
-            migration,
-        ))
+        view_of(
+            edit_state(candidate_staged, active_is_candidate, pending, migration),
+            None,
+        )
     }
 
     fn enabled(view: &EditView) -> Vec<EditCommand> {
@@ -242,7 +259,7 @@ mod tests {
         assert_eq!(view.stage, EditStage::Idle);
         assert_eq!(enabled(&view), [EditCommand::Accept]);
         assert_eq!(next(&view), Some(EditCommand::Accept));
-        assert!(view.commands.finalize_all.view.enabled);
+        assert!(view.commands.finalize_all.enabled);
         assert_eq!(code(&view, EditCommand::Test), Some("V4012"));
         assert_eq!(code(&view, EditCommand::Untest), Some("V4014"));
     }
@@ -265,9 +282,34 @@ mod tests {
         let view = view(true, true, None, false);
 
         assert_eq!(view.stage, EditStage::Testing);
-        assert_eq!(enabled(&view), [EditCommand::Untest, EditCommand::Assemble]);
+        assert_eq!(
+            enabled(&view),
+            [
+                EditCommand::Untest,
+                EditCommand::Assemble,
+                EditCommand::Cancel
+            ]
+        );
         assert_eq!(next(&view), Some(EditCommand::Assemble));
-        assert_eq!(code(&view, EditCommand::Cancel), Some("V4015"));
+        assert_eq!(code(&view, EditCommand::Cancel), None);
+    }
+
+    #[test]
+    fn edit_view_when_testing_then_cancel_shows_its_two_steps_and_no_other_command_has_any() {
+        let view = view(true, true, None, false);
+
+        assert_eq!(
+            view.commands.edit[&EditCommand::Cancel].steps,
+            [EditCommand::Untest, EditCommand::Cancel]
+        );
+        assert_eq!(
+            EditCommand::ALL
+                .into_iter()
+                .filter(|command| *command != EditCommand::Cancel)
+                .filter(|command| !view.commands.edit[command].steps.is_empty())
+                .count(),
+            0
+        );
     }
 
     #[test]
@@ -278,6 +320,7 @@ mod tests {
         assert_eq!(enabled(&view), [EditCommand::Assemble]);
         assert_eq!(next(&view), Some(EditCommand::Assemble));
         assert_eq!(code(&view, EditCommand::Untest), Some("V4011"));
+        assert_eq!(code(&view, EditCommand::Cancel), Some("V4011"));
     }
 
     #[test]
@@ -290,7 +333,7 @@ mod tests {
             assert_eq!(view.stage, EditStage::SwapPending);
             assert_eq!(enabled(&view), []);
             assert_eq!(next(&view), None);
-            assert!(!view.commands.finalize_all.view.enabled);
+            assert!(!view.commands.finalize_all.enabled);
         }
     }
 
@@ -343,11 +386,11 @@ mod tests {
             let finalize = &view.commands.finalize_all;
 
             assert_eq!(
-                finalize.view.enabled,
+                finalize.enabled,
                 view.commands.edit[&EditCommand::Accept].enabled
             );
             assert_eq!(
-                finalize.view.reason,
+                finalize.reason,
                 view.commands.edit[&EditCommand::Accept].reason
             );
             assert_eq!(
@@ -358,7 +401,7 @@ mod tests {
                     EditCommand::Assemble
                 ]
             );
-            assert_eq!(finalize.view.label, "Finalize all");
+            assert_eq!(finalize.label, "Finalize all");
         }
     }
 
@@ -379,6 +422,33 @@ mod tests {
             serde_json::json!(["accept", "test", "assemble"])
         );
         assert_eq!(json["commands"]["finalizeAll"]["label"], "Finalize all");
+    }
+
+    #[test]
+    fn edit_view_when_a_candidate_exists_then_it_warns_that_a_restart_loses_it() {
+        for (candidate, active, pending, migration) in [
+            (true, false, None, false),
+            (true, false, None, true),
+            (true, true, None, false),
+            (true, true, None, true),
+            (true, false, Some(PendingSwap::Test), false),
+        ] {
+            let view = view(candidate, active, pending, migration);
+
+            assert_eq!(
+                view.warning.as_deref(),
+                Some("a restart of the device loses this candidate")
+            );
+        }
+    }
+
+    #[test]
+    fn edit_view_when_no_candidate_then_there_is_no_warning_on_the_wire() {
+        let view = view(false, false, None, false);
+        let json = serde_json::to_value(&view).unwrap();
+
+        assert_eq!(view.warning, None);
+        assert!(json.get("warning").is_none());
     }
 
     #[test]

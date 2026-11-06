@@ -257,12 +257,25 @@ Field set:
   and `cancel`, and for `finalizeAll`, a composite whose `steps` (`accept`,
   `test`, `assemble`) the client runs in order and which is enabled when its
   first step is. Each entry has `enabled`, a `label` and, when it is not
-  enabled, a `reason` with the V-code and its text. `next` is the command that
-  moves the edit one stage on, with its `label`; it is absent while a swap is
-  pending. The view is built from the host's own transition table, so a client
+  enabled, a `reason` with the V-code and its text; the reason of a refused
+  accept names the staged edit (its `name` and `origin`) when the accept that
+  staged it gave them. An entry has `steps` when the device runs several commands
+  for the one it is sent: Cancel while the candidate executes under Test is
+  untest, then cancel, at the next scan boundary, answered once after it
+  (REQ-VC-vm-cli-023); the client does not sequence them. `next` is the command
+  that moves the edit one stage on, with its `label`; it is absent while a swap is
+  pending. `warning` is present while a candidate exists: a restart of the device
+  loses it (REQ-VC-vm-cli-057). The view is built from the host's own transition table, so a client
   offers exactly what the host accepts and computes no enablement itself;
   the field is absent from a device that predates it, and adding it keeps the
   protocol version (REQ-VC-vm-cli-054).
+- `candidateLost` — optional, next to `retained`: the unfinished edit that the
+  previous run of the device left, found in the note `<file>.edit` at boot
+  (REQ-VC-vm-cli-056). A candidate lives in RAM only; the note holds the `name`,
+  `origin`, `stage` and candidate hash of the edit and is never used to restore
+  it. `candidateLost` has `name` and `origin` when the accept gave them, and
+  `stage` (`accepted`, `testing`, `testingMigration`) unless the note was
+  damaged.
 - `persistedContentHash` and `retained` — optional, next to `application`:
   what the device keeps beside the application (REQ-VC-vm-cli-040).
   `persistedContentHash` is the `contentHash` of the application the device
@@ -518,7 +531,8 @@ The online build has two commit policies over the same upload
   checkpoints between the steps: `acceptEdits`, then `testEdits` to run
   the candidate and observe it, then resolve it with `assembleEdits`
   (promote), `untestEdits` (revert to the normal artifact), or
-  `cancelEdits` (discard while the normal artifact runs). Safety-critical
+  `cancelEdits` (discard; while the candidate executes the device first
+  reverts to the normal artifact, as one command). Safety-critical
   changes use this manual sequence.
 
 Zero new commands: these are exactly the hot-edit FSM commands — `test`,
@@ -603,8 +617,9 @@ addition is a pre-send baseline check.
    the build proceeds as above — `acceptEdits` (answering V4010 with the
    ADR-0061 migration decisions), `testEdits` (mandatory per ADR-0064),
    observe, `assembleEdits`. When the candidate is a migration candidate,
-   the panel surfaces early that untest is unavailable (V4011) — commit or
-   cancel are the only exits.
+   the panel surfaces early that untest is unavailable (V4011) — cancel is
+   possible only before Test, and once it executes assemble is the only exit
+   (cancel is refused with V4011 as well).
 3. **Mismatch → coded refusal.** Another engineer edited the device, or the
    hash simply differs: the record is stale and the client refuses with a
    new E-code in the existing registry

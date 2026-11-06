@@ -587,3 +587,31 @@ fn crossload_when_pair_untests_then_selector_returns_and_candidate_is_kept() {
     assert_eq!(a.host.read_variable(counter).unwrap(), 15);
     assert_eq!(b.link.receiver().alarm(), None);
 }
+
+#[test]
+fn crossload_when_pair_cancels_from_testing_then_both_drop_the_candidate_and_run_the_original() {
+    let base = compile_source(&counter_program("Counter := Counter + 1;"));
+    let candidate = compile_source(&counter_program("Counter := Counter + 10;"));
+    let (mut a, mut b) = boot_pair(&base);
+    a.drive_scans = false;
+
+    crossload_candidate(&mut a, &mut b, candidate);
+    a.host.test().unwrap();
+    a.host.run(1, || 0).unwrap();
+    assert_eq!(a.host.status().mode, HostMode::Testing);
+
+    // Cancel from Testing is one command with two steps: the Primary reverts
+    // at its boundary and discards the candidate there; the notice that
+    // follows the acknowledgment makes the Secondary drop its copy.
+    a.host.cancel().unwrap();
+    a.host.run(1, || 0).unwrap();
+    a.link.enqueue(CrossloadMessage::CancelCandidate);
+    for _ in 0..3 {
+        step_pair(&mut a, &mut b);
+    }
+
+    assert_eq!(a.host.status().mode, HostMode::Normal);
+    assert!(a.host.status().candidate.is_none());
+    assert!(b.host.status().candidate.is_none());
+    assert_eq!(b.link.receiver().alarm(), None);
+}

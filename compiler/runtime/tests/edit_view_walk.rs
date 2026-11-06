@@ -25,7 +25,8 @@ use std::path::PathBuf;
 
 use common::edit_states::{body_candidate, host_in, State, STATES};
 use ironplc_runtime::{
-    edit_view, CommandError, EditCommand, EditStage, EditView, OnlineChangeError, RuntimeHost,
+    edit_view, AcceptedEdit, CommandError, EditCommand, EditStage, EditView, HostMode,
+    OnlineChangeError, RuntimeHost,
 };
 
 /// The environment variable that makes the golden test rewrite its file.
@@ -100,6 +101,38 @@ fn edit_view_when_command_is_refused_then_the_reason_is_the_code_and_text_of_the
 }
 
 #[test]
+fn edit_view_when_the_staged_edit_is_named_then_the_reason_and_the_refusal_are_the_same_text() {
+    let mut host = host_in(State::NoCandidate);
+    host.stage_with_decisions(
+        body_candidate(),
+        &std::collections::BTreeMap::new(),
+        Some(AcceptedEdit {
+            wire: Vec::new(),
+            name: Some("fix pump".to_string()),
+            origin: Some("studio on WS-12".to_string()),
+        }),
+    )
+    .unwrap();
+
+    let view = edit_view(&host.status());
+    let refusal = CommandError::from(host.stage(body_candidate()).unwrap_err());
+
+    let reason = view.commands.edit[&EditCommand::Accept]
+        .reason
+        .as_ref()
+        .unwrap();
+    assert_eq!(reason.code, "V4013");
+    assert_eq!(reason.code, refusal.v_code());
+    assert_eq!(reason.text, refusal.message());
+    assert!(reason.text.contains("fix pump"), "{}", reason.text);
+    // Finalize all is refused with the reason of its first step.
+    assert_eq!(
+        view.commands.finalize_all.reason.as_ref().unwrap().text,
+        reason.text
+    );
+}
+
+#[test]
 fn edit_view_when_each_state_then_stage_and_next_are_the_expected_ones() {
     for state in STATES {
         let view = view_in(state);
@@ -132,11 +165,11 @@ fn edit_view_when_finalize_all_then_it_is_enabled_when_accept_is_and_its_steps_r
         let finalize = &view.commands.finalize_all;
 
         assert_eq!(
-            finalize.view.enabled,
+            finalize.enabled,
             apply(&mut host_in(state), EditCommand::Accept).is_ok(),
             "{state:?}"
         );
-        if finalize.view.enabled {
+        if finalize.enabled {
             // The client runs the steps in order; a swap applies at the scan
             // boundary between them.
             let mut host = host_in(state);
@@ -150,6 +183,66 @@ fn edit_view_when_finalize_all_then_it_is_enabled_when_accept_is_and_its_steps_r
                 edit_view(&status).stage,
                 EditStage::Idle,
                 "finalized from {state:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn edit_view_when_a_candidate_is_staged_and_no_swap_is_pending_then_the_host_accepts_a_command_that_ends_the_edit(
+) {
+    // The invariant of the class: an unfinished edit always has an exit. A
+    // state that waits for a scan boundary has none to offer; the boundary is
+    // its exit.
+    for state in STATES {
+        let view = view_in(state);
+        if view.stage == EditStage::Idle || view.stage == EditStage::SwapPending {
+            continue;
+        }
+        let exits: Vec<EditCommand> = [EditCommand::Cancel, EditCommand::Assemble]
+            .into_iter()
+            .filter(|command| apply(&mut host_in(state), *command).is_ok())
+            .collect();
+
+        assert!(!exits.is_empty(), "no exit in {state:?}");
+        for exit in exits {
+            assert!(view.commands.edit[&exit].enabled, "{exit:?} in {state:?}");
+        }
+    }
+}
+
+#[test]
+fn edit_view_when_a_command_has_steps_then_the_host_runs_them_all_at_the_next_boundary() {
+    for state in STATES {
+        for command in EditCommand::ALL {
+            let steps = view_in(state).commands.edit[&command].steps.clone();
+            if steps.is_empty() {
+                continue;
+            }
+            let mut host = host_in(state);
+
+            assert_eq!(
+                apply(&mut host, command),
+                Ok(()),
+                "{command:?} in {state:?}"
+            );
+            // One command was sent: the swap of its first step waits for the
+            // boundary and the view says so.
+            assert_eq!(
+                edit_view(&host.status()).stage,
+                EditStage::SwapPending,
+                "{command:?} in {state:?}"
+            );
+            host.run(1, || 0).unwrap();
+
+            // The boundary applied the revert and discarded the candidate.
+            let status = host.status();
+            assert_eq!(status.candidate, None, "{command:?} in {state:?}");
+            assert_eq!(status.mode, HostMode::Normal, "{command:?} in {state:?}");
+            assert_eq!(
+                edit_view(&status).stage,
+                EditStage::Idle,
+                "{command:?} in {state:?}"
             );
         }
     }

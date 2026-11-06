@@ -124,6 +124,33 @@ fn refuse(mut stream: TcpStream, peer: SocketAddr) {
     close_gracefully(&mut stream);
 }
 
+/// The body of a session thread: serves the connection to its end. The thread
+/// is generic over it so that a test can end a session in a way the production
+/// body does not.
+type SessionBody = fn(&LoopHandle, &mut TcpStream) -> io::Result<()>;
+
+/// The claim on the one engineering session (ADR-0065): taking it is the
+/// refusal of every other connection, and dropping it frees the device.
+///
+/// The release is the drop, so it happens on every way a session thread can
+/// end: it returns, it fails, or it panics. A flag that the thread had to clear
+/// by hand would stay set after a panic and the device would refuse every
+/// client with V6014 until it was restarted.
+struct SessionClaim(Arc<AtomicBool>);
+
+impl SessionClaim {
+    /// Claims the session, or `None` when another connection holds it.
+    fn take(occupied: &Arc<AtomicBool>) -> Option<SessionClaim> {
+        (!occupied.swap(true, Ordering::SeqCst)).then(|| SessionClaim(Arc::clone(occupied)))
+    }
+}
+
+impl Drop for SessionClaim {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::SeqCst);
+    }
+}
+
 /// Serves one TCP session: the stdio session over the framed transport,
 /// relayed to the device loop, with the per-message read timeout the timeout
 /// policy sets. `stream` stays with the caller so a failed session can still
@@ -135,15 +162,22 @@ fn serve_connection(handle: &LoopHandle, stream: &mut TcpStream) -> io::Result<(
     relay_session(handle, reader, writer)
 }
 
-/// Serves one accepted connection to its end, then releases the occupied
-/// flag whatever the outcome — a lost session must never wedge the listener.
+/// Serves one accepted connection to its end, then releases the claim
+/// whatever the outcome — a lost session must never wedge the listener. A
+/// session ends nothing but itself: the edit on the device stays as it was,
+/// because the body only relays commands to the device loop.
+///
+/// `claim` is the last parameter so that it is dropped first when the thread
+/// unwinds, and a panic frees the device before the socket closes, as the
+/// normal end does.
 fn serve_accepted(
-    occupied: Arc<AtomicBool>,
     handle: LoopHandle,
     mut stream: TcpStream,
     peer: SocketAddr,
+    session: SessionBody,
+    claim: SessionClaim,
 ) {
-    let result = serve_connection(&handle, &mut stream);
+    let result = session(&handle, &mut stream);
     let mut framing_answered = false;
     match result {
         Ok(()) => log::info!("session with {peer} ended"),
@@ -158,14 +192,14 @@ fn serve_accepted(
         Err(err) => log::warn!("session with {peer} ended with an error: {err}"),
     }
     // INVARIANT (the other site: `TcpChannel::close` in the session client,
-    // `compiler/session-client/src/endpoint/tcp.rs`): the occupied flag is
-    // released BEFORE the socket is dropped. The end of the connection that a
+    // `compiler/session-client/src/endpoint/tcp.rs`): the claim is released
+    // BEFORE the socket is dropped, here and when a panic unwinds. The end of the connection that a
     // client reads (EOF after its own close) therefore means the slot is free,
     // and a client that closes gracefully and then connects again is never
     // refused with V6014. Nothing between this store and the drop of `stream`
     // may be moved above it. The next client may also connect while a dropped
     // client finishes its close below.
-    occupied.store(false, Ordering::SeqCst);
+    drop(claim);
     if framing_answered {
         close_gracefully(&mut stream);
     }
@@ -250,7 +284,7 @@ pub(crate) fn serve_tcp(
     std::thread::Builder::new()
         .name("serve-accept".to_string())
         .spawn(move || {
-            if let Err(err) = accept_sessions(&listener, &handle) {
+            if let Err(err) = accept_sessions(&listener, &handle, serve_connection) {
                 // The listener is gone: the device stops in order.
                 if failed.send(err).is_err() {
                     log::error!("the listener failed after the device had stopped");
@@ -284,7 +318,11 @@ pub(crate) fn serve_tcp(
 /// The accept loop: one session thread per accepted connection, the occupied
 /// flag as the single-session claim. Returns only with the error that ends
 /// the listener.
-fn accept_sessions(listener: &TcpListener, handle: &LoopHandle) -> Result<(), VmError> {
+fn accept_sessions(
+    listener: &TcpListener,
+    handle: &LoopHandle,
+    session: SessionBody,
+) -> Result<(), VmError> {
     let occupied = Arc::new(AtomicBool::new(false));
     loop {
         let (stream, peer) = listener.accept().map_err(|err| {
@@ -295,7 +333,7 @@ fn accept_sessions(listener: &TcpListener, handle: &LoopHandle) -> Result<(), Vm
         })?;
         // The claim is the refusal: whoever finds the device occupied gets
         // one coded line and is closed, never a session.
-        if occupied.swap(true, Ordering::SeqCst) {
+        let Some(claim) = SessionClaim::take(&occupied) else {
             log::info!("refusing {peer}: one engineering session is already active");
             // The close waits for the peer, so it does not hold the accept loop.
             if let Err(err) = std::thread::Builder::new()
@@ -305,14 +343,13 @@ fn accept_sessions(listener: &TcpListener, handle: &LoopHandle) -> Result<(), Vm
                 log::warn!("unable to spawn the refusal of {peer}: {err}");
             }
             continue;
-        }
-        let session_occupied = Arc::clone(&occupied);
+        };
         let session_handle = handle.clone();
         std::thread::Builder::new()
             .name(format!("serve-session-{peer}"))
-            .spawn(move || serve_accepted(session_occupied, session_handle, stream, peer))
+            .spawn(move || serve_accepted(session_handle, stream, peer, session, claim))
             .map_err(|err| {
-                occupied.store(false, Ordering::SeqCst);
+                // The closure was dropped with the claim in it: the device is free.
                 VmError::io(
                     error::SESSION_IO,
                     format!("unable to spawn a session thread: {err}"),
@@ -320,6 +357,9 @@ fn accept_sessions(listener: &TcpListener, handle: &LoopHandle) -> Result<(), Vm
             })?;
     }
 }
+
+#[cfg(test)]
+mod session_tests;
 
 #[cfg(test)]
 mod tests {
@@ -372,6 +412,87 @@ mod tests {
 
         let value: serde_json::Value = serde_json::from_str(&line).unwrap();
         assert_eq!(value["vCode"], "V6014");
+    }
+
+    #[test]
+    fn session_claim_take_when_free_then_claims_and_drop_frees() {
+        let occupied = Arc::new(AtomicBool::new(false));
+
+        let claim = SessionClaim::take(&occupied);
+        assert!(claim.is_some());
+        assert!(occupied.load(Ordering::SeqCst));
+        drop(claim);
+
+        assert!(!occupied.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn session_claim_take_when_occupied_then_none_and_the_holder_keeps_the_claim() {
+        let occupied = Arc::new(AtomicBool::new(false));
+        let holder = SessionClaim::take(&occupied);
+
+        let second = SessionClaim::take(&occupied);
+
+        assert!(second.is_none());
+        assert!(occupied.load(Ordering::SeqCst));
+        drop(holder);
+        assert!(!occupied.load(Ordering::SeqCst));
+    }
+
+    /// A connected pair: the device end, its peer address, and the client end.
+    fn connected() -> (TcpStream, SocketAddr, TcpStream) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        let (server, peer) = listener.accept().unwrap();
+        (server, peer, client)
+    }
+
+    /// A handle to a loop nobody runs: the body of the test never calls it.
+    fn unused_handle() -> LoopHandle {
+        device_loop::channel().0
+    }
+
+    #[spec_test(REQ_VC_vm_cli_055)]
+    #[test]
+    fn serve_accepted_when_the_session_panics_then_the_claim_is_free_before_the_socket_closes() {
+        let (server, peer, mut client) = connected();
+        let occupied = Arc::new(AtomicBool::new(false));
+        let claim = SessionClaim::take(&occupied).unwrap();
+        let session = std::thread::spawn(move || {
+            serve_accepted(
+                unused_handle(),
+                server,
+                peer,
+                |_, _| panic!("the body of the session failed"),
+                claim,
+            )
+        });
+
+        // The client reads until the device closes the socket.
+        let mut sink = Vec::new();
+        client.read_to_end(&mut sink).unwrap();
+
+        // At that moment the device must already be free: a client that sees
+        // the end of the connection and connects again is not refused.
+        assert!(!occupied.load(Ordering::SeqCst));
+        assert!(session.join().is_err());
+    }
+
+    #[spec_test(REQ_VC_vm_cli_055)]
+    #[test]
+    fn serve_accepted_when_the_session_ends_then_the_claim_is_free_before_the_socket_closes() {
+        let (server, peer, mut client) = connected();
+        let occupied = Arc::new(AtomicBool::new(false));
+        let claim = SessionClaim::take(&occupied).unwrap();
+        let session = std::thread::spawn(move || {
+            serve_accepted(unused_handle(), server, peer, |_, _| Ok(()), claim)
+        });
+
+        let mut sink = Vec::new();
+        client.read_to_end(&mut sink).unwrap();
+
+        assert!(!occupied.load(Ordering::SeqCst));
+        assert!(session.join().is_ok());
     }
 
     #[test]

@@ -27,10 +27,13 @@
 //! # Scan driving
 //!
 //! `test`/`untest` only *request* a swap; the host applies it at the next
-//! scan boundary ([`RuntimeHost::run`]). Where the CLI `serve` session leaves
-//! that to its caller, each MCP tool that advances the FSM (`hot_edit_test`,
-//! `hot_edit_untest`, `hot_edit_assemble`) drives one scan round after an
-//! acknowledgment, so the state an agent reads back has actually switched.
+//! scan boundary ([`RuntimeHost::run`]), and so does `cancel` while the
+//! candidate executes under Test (untest, then cancel). Where the CLI `serve`
+//! session leaves that to its caller, each MCP tool that advances the FSM
+//! (`hot_edit_test`, `hot_edit_untest`, `hot_edit_assemble`) drives one scan
+//! round after an acknowledgment, and so does any command that left a swap
+//! pending, so the state an agent reads back has actually switched. Assemble
+//! takes effect at once and is driven for the program to have executed.
 //! The round runs at a constant zero uptime — the convention of the runtime
 //! acceptance tests — where every task is ready immediately after a (re)load,
 //! so the boundary round executes each task exactly once. A trap in that
@@ -131,10 +134,17 @@ pub struct HotEditResponse {
     /// started the session, `"ack"` for every other success. Null on failure.
     pub result: Option<String>,
     /// The host's hot-edit status after the command: mode, generation
-    /// counters, migration flag, and completed scan rounds. Null on failure.
+    /// counters, migration flag, completed scan rounds, and `edit`, the view of
+    /// which edit commands the host allows now and why not for the others (the
+    /// host builds it; the tool computes no enablement). Present whenever the
+    /// host was reached, a refusal included, so an agent that was refused reads
+    /// what it may do instead. Null when the failure never reached the host
+    /// (compile diagnostics, a missing session, a connection that failed).
     pub status: Option<StatusPayload>,
     /// The stable V-code when the command layer refused the command (e.g.
-    /// `"V4011"`) or the VM trapped during a driven scan round. Null when the
+    /// `"V4011"`) or the VM trapped during a driven scan round. For a refusal it
+    /// is the code of the `reason` that `status.edit` gives for the command, and
+    /// `message` is its text: one text from the host. Null when the
     /// failure never reached the command layer (compile diagnostics, a
     /// missing session, a candidate the workstation did not send because the
     /// stable variable IDs are out of sync, an internal invariant).
@@ -225,6 +235,13 @@ impl HotEditResponse {
             run_state: None,
             diagnostics: vec![],
         }
+    }
+
+    /// The status the host reported after the command, for a response that
+    /// does not carry one yet: a refusal shows with the view of what is allowed.
+    fn with_status(mut self, status: StatusPayload) -> Self {
+        self.status = Some(status);
+        self
     }
 
     /// Builds the failure response for a host or VM failure: session
@@ -340,7 +357,12 @@ fn run(command: Command, target: Target<'_>, drive_scan: bool) -> HotEditRespons
 /// `drive_scan` is set for the FSM-advancing commands: their effect applies
 /// at the next scan boundary, so after an acknowledgment one round is driven
 /// through [`RuntimeHost::run`] before the status snapshot is taken (see the
-/// module documentation for the clock convention).
+/// module documentation for the clock convention). A command that left a swap
+/// pending is driven too, whatever its name: cancel under Test is one.
+///
+/// A refusal carries the status as well, with the `edit` view the host builds,
+/// and the code and text of the refusal are the host's: they are the `reason`
+/// of that command in the view.
 fn dispatch(command: Command, session: &mut HotEditSession, drive_scan: bool) -> HotEditResponse {
     let Some(host) = session.host.as_mut() else {
         return validation_failure(text::mcp_input_validation_hot_edit_session_missing());
@@ -349,14 +371,19 @@ fn dispatch(command: Command, session: &mut HotEditSession, drive_scan: bool) ->
     match execute(command, host, &mcp_device_identity()) {
         Response::Status(status) => HotEditResponse::ok("ack", status),
         Response::Ack => {
-            if drive_scan {
+            // A command that left a swap pending (cancel under Test is untest,
+            // then cancel) is finished by the boundary round, as one that
+            // advances the FSM by name.
+            if drive_scan || host.swap_pending() {
                 if let Err(error) = host.run(1, || 0) {
                     return HotEditResponse::runtime_error(error);
                 }
             }
             HotEditResponse::ok("ack", StatusPayload::from(host.status()))
         }
-        Response::Error(error) => HotEditResponse::command_error(&error),
+        Response::Error(error) => {
+            HotEditResponse::command_error(&error).with_status(StatusPayload::from(host.status()))
+        }
         // Unreachable from the MCP tools (they never send `identity`, the
         // engineering-connection handshake of ADR-0063): the session has no
         // device panel to answer with.
@@ -564,9 +591,9 @@ pub fn build_untest_response<'a>(target: impl Into<Target<'a>>) -> HotEditRespon
     run(Command::UntestEdits, target.into(), true)
 }
 
-/// Builds the `hot_edit_assemble` response: promotes the staged candidate to
-/// the running application and drives one scan round. Allowed from both the
-/// staged and the testing phase.
+/// Builds the `hot_edit_assemble` response: promotes the candidate to the
+/// running application and drives one scan round. The candidate must have run
+/// under Test: from the staged phase the host refuses with V4017.
 pub fn build_assemble_response<'a>(target: impl Into<Target<'a>>) -> HotEditResponse {
     run(Command::AssembleEdits, target.into(), true)
 }
@@ -586,9 +613,11 @@ pub fn build_stop_response<'a>(target: impl Into<Target<'a>>) -> HotEditResponse
     run(Command::StopScan, target.into(), false)
 }
 
-/// Builds the `hot_edit_cancel` response: discards the staged candidate while
-/// the original artifact keeps running. Takes effect immediately, so no scan
-/// round is driven.
+/// Builds the `hot_edit_cancel` response: discards the candidate. While the
+/// original artifact runs this takes effect at once. While a logic-only
+/// candidate runs under Test the host reverts and discards at the next scan
+/// boundary (two steps of one command), so a round is driven because the command
+/// left a swap pending (see [`dispatch`]).
 pub fn build_cancel_response<'a>(target: impl Into<Target<'a>>) -> HotEditResponse {
     run(Command::CancelEdits, target.into(), false)
 }

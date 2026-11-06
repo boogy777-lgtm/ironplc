@@ -151,6 +151,7 @@ fn identity_response_of(
         redundancy,
         persisted_content_hash: None,
         retained: None,
+        candidate_lost: None,
         fault: None,
         run_state: RunState::Running,
     }))
@@ -375,6 +376,7 @@ fn status_payload_when_edit_view_present_then_round_trips_through_the_wire() {
     let mut payload: StatusPayload = serde_json::from_str(STATUS_WITHOUT_HASHES).unwrap();
     payload.edit = Some(Box::new(crate::edit_view::view_of(
         crate::edit_guard::EditState::Testing { migration: true },
+        None,
     )));
 
     let line = render_response(&Response::Status(payload.clone())).unwrap();
@@ -487,7 +489,7 @@ fn command_error_display_then_formats_code_dash_message() {
 )]
 #[case::untest(OnlineChangeError::UntestUnsupported, "V4011")]
 #[case::none_staged(OnlineChangeError::NoCandidateStaged, "V4012")]
-#[case::already_staged(OnlineChangeError::CandidateAlreadyStaged, "V4013")]
+#[case::already_staged(OnlineChangeError::CandidateAlreadyStaged(None), "V4013")]
 #[case::no_test(OnlineChangeError::NoTestInProgress, "V4014")]
 #[case::wrong_mode(OnlineChangeError::NotAllowedInThisMode, "V4015")]
 #[case::without_test(OnlineChangeError::AssembleWithoutTest, "V4017")]
@@ -659,6 +661,33 @@ fn identity_when_stored_item_notes_then_fields_round_trip() {
         serde_json::json!({"result": "discarded", "reason": "otherApplication"})
     );
     assert_eq!(parse_response(&line).unwrap(), Response::Identity(payload));
+}
+
+#[test]
+fn identity_when_candidate_lost_then_the_note_round_trips_with_name_origin_and_stage() {
+    let Response::Identity(mut payload) = identity_response(None) else {
+        panic!("identity_response builds an identity");
+    };
+    payload.candidate_lost = Some(crate::CandidateLost {
+        name: Some("fix pump".into()),
+        origin: None,
+        stage: Some(crate::EditStage::Testing),
+    });
+    let line = render_response(&Response::Identity(payload.clone())).unwrap();
+    let value: serde_json::Value = serde_json::from_str(&line).unwrap();
+
+    assert_eq!(
+        value["candidateLost"],
+        serde_json::json!({"name": "fix pump", "stage": "testing"})
+    );
+    assert_eq!(parse_response(&line).unwrap(), Response::Identity(payload));
+}
+
+#[test]
+fn identity_when_no_candidate_was_lost_then_the_field_is_absent() {
+    let line = render_response(&identity_response(None)).unwrap();
+
+    assert!(!line.contains("candidateLost"));
 }
 
 #[test]

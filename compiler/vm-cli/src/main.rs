@@ -8,6 +8,7 @@ mod cli;
 mod device_loop;
 mod device_settings;
 mod discovery;
+mod edit_marker_store;
 mod error;
 mod ha_pair;
 mod logger;
@@ -16,6 +17,8 @@ mod retained_store;
 mod serve;
 #[cfg(test)]
 mod serve_device_tests;
+#[cfg(test)]
+mod serve_edit_tests;
 #[cfg(test)]
 mod serve_retained_tests;
 #[cfg(test)]

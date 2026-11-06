@@ -9,12 +9,13 @@
 //! acknowledges, so there is nothing for the tool to drive.
 //!
 //! A tool call is one session: connect, `identity`, the command, and a
-//! `getStatus` for the snapshot after an acknowledgement, then the connection is
-//! dropped. The device serves one engineering session at a time, so a call made
+//! `getStatus` for the snapshot after an acknowledgement or a refusal (the
+//! snapshot carries the `edit` view that the device builds, so a refused agent
+//! reads what the device allows), then the connection is dropped. The device serves one engineering session at a time, so a call made
 //! while another session is open is refused with V6014, which the tool returns.
 
 use ironplc_problems::text;
-use ironplc_runtime::{Command, Response, RunState};
+use ironplc_runtime::{Command, CommandError, Response, RunState};
 use ironplc_session_client::{Session, SessionError};
 
 use super::{internal_failure, validation_failure, HotEditResponse};
@@ -38,7 +39,14 @@ pub(super) fn exchange(device: &ResolvedDevice, command: Command) -> HotEditResp
 
 /// Sends the command and, after an acknowledgement, reads the status.
 fn carry_out(session: &mut Session, command: Command) -> Result<HotEditResponse, SessionError> {
-    match session.send(&command)? {
+    let answer = match session.send(&command) {
+        Ok(answer) => answer,
+        // The refusal of the device is the answer; the view next to it says what
+        // the device allows instead.
+        Err(SessionError::Device(refusal)) => return Ok(refused(session, &refusal)),
+        Err(error) => return Err(error),
+    };
+    match answer {
         Response::Status(status) => Ok(HotEditResponse::ok("ack", status)),
         Response::Ack => status_after(session, None),
         // The scan control answers the state it left: the response carries it
@@ -61,6 +69,17 @@ fn status_after(
             Ok(response)
         }
         other => Ok(unexpected(&other)),
+    }
+}
+
+/// The response for a refusal of the device: its code and text, verbatim, and
+/// the status the device reports after it. A device that cannot give the status
+/// (the connection ended) leaves the response without one.
+fn refused(session: &mut Session, refusal: &CommandError) -> HotEditResponse {
+    let response = HotEditResponse::command_error(refusal);
+    match session.send(&Command::GetStatus) {
+        Ok(Response::Status(status)) => response.with_status(status),
+        Ok(_) | Err(_) => response,
     }
 }
 

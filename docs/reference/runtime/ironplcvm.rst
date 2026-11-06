@@ -104,10 +104,12 @@ Commands
    names the persistent variables that have no stable variable ID, which no
    decision can replace. A line that does
    not parse as a command is answered with an error line whose ``vCode`` is
-   null — codec errors carry no V-code. A ``testEdits``, ``untestEdits`` or
-   ``assembleEdits`` records a swap that applies at a scan boundary, and its
-   acknowledgment is written after that boundary, so the swap has been applied
-   when the line reaches the client.
+   null — codec errors carry no V-code. A ``testEdits`` or ``untestEdits``
+   records a swap that applies at a scan boundary, and so does ``cancelEdits``
+   while the candidate executes under Test (see :ref:`ironplcvm-edit-view`).
+   The acknowledgment of each is written after that boundary, so the swap has
+   been applied when the line reaches the client. ``assembleEdits`` takes effect
+   at once and is also answered after a boundary round.
 
    ``--listen`` *ADDR*
       Serve the same protocol on TCP instead of stdin/stdout. *ADDR* is
@@ -261,16 +263,18 @@ or refuse the command. A device that predates the field omits it.
                        "reason": {"code": "V4013", "text": "a candidate is already staged"},
                        "steps": ["accept", "test", "assemble"]}
      },
-     "next": {"command": "test", "label": "Test"}
+     "next": {"command": "test", "label": "Test"},
+     "warning": "a restart of the device loses this candidate"
    }
 
 ``stage``
    Where the edit stands: ``idle`` (no candidate), ``accepted`` (a candidate is
    staged and the original executes), ``testing`` (the candidate executes),
    ``testingMigration`` (the candidate of a state migration executes, and
-   ``untestEdits`` is refused with :doc:`V4011 <problems/V4011>`) or
-   ``swapPending`` (a ``testEdits`` or ``untestEdits`` waits for the next scan
-   boundary, and no edit command is allowed until then).
+   ``untestEdits`` and ``cancelEdits`` are refused with
+   :doc:`V4011 <problems/V4011>`: only ``assembleEdits`` ends the edit) or
+   ``swapPending`` (a ``testEdits``, ``untestEdits`` or ``cancelEdits`` waits for
+   the next scan boundary, and no edit command is allowed until then).
 
 ``commands``
    One entry for each of ``accept``, ``test``, ``untest``, ``assemble`` and
@@ -279,15 +283,27 @@ or refuse the command. A device that predates the field omits it.
    is true exactly when the device accepts the command now. ``label`` is the
    plain English name to show. ``reason`` is present when ``enabled`` is false:
    the problem code and the text of the refusal that the command would get.
+   When the refusal is :doc:`V4013 <problems/V4013>` and the accept that staged
+   the candidate named the edit, the text names it too.
+   ``steps`` is present when the command is made of several: ``cancel`` while the
+   candidate executes under Test has the steps ``untest`` and ``cancel``. The
+   client sends ``cancelEdits`` once; the device reverts to the original program
+   at the next scan boundary, discards the candidate there, and answers after that
+   boundary, so the one acknowledgment means the edit is over.
    ``finalizeAll`` is the composite command that runs ``steps`` in order, one
-   after the other, with the scan boundary between them that applies a swap. It
-   is enabled when its first step is, so it is offered only while no candidate
-   is staged.
+   after the other, with the scan boundary between them that applies a swap; it
+   is the client that sends them. It is enabled when its first step is, so it is
+   offered only while no candidate is staged.
 
 ``next``
    The command that moves the edit one stage on: ``accept`` when idle, ``test``
    when accepted, ``assemble`` when testing. It is always enabled. It is absent
    while a swap is pending.
+
+``warning``
+   Present while a candidate exists, in any stage but ``idle``: ``a restart of the
+   device loses this candidate``. A candidate lives in RAM only. See
+   :ref:`ironplcvm-lost-candidate`.
 
 The scan control (``startScan`` and ``stopScan``) and ``setDeviceSettings``
 are allowed in every stage and are not part of the view.
@@ -445,6 +461,44 @@ A write that fails is :doc:`V6018 <problems/V6018>`. The device keeps running an
 the file keeps its previous content. ``assembleEdits`` answers the error instead
 of the acknowledgment, the period logs it, and :program:`ironplcvm serve` exits
 with code 2 when the write at the stop fails.
+
+.. _ironplcvm-lost-candidate:
+
+A candidate lost by a restart
+=============================
+
+A candidate edit lives in RAM only, in whatever stage it is: staged, or
+executing under Test. A restart of the device loses it, and the device starts the
+program it last committed with no edit in progress. The engineer repeats the
+edit. The edit view carries a ``warning`` while a candidate exists, so that a
+client can say so before the restart happens.
+
+So that the start after the restart can say what was lost, the device keeps a
+small note of the unfinished edit in the file :file:`{FILE}.edit` beside the
+served container. It is written when a candidate is accepted, rewritten when the
+edit goes into or out of Test, and removed when the edit ends by ``assembleEdits``
+or ``cancelEdits``. Each write is a temporary file :file:`{FILE}.edit.tmp`
+renamed over the file. The note holds the ``name`` and ``origin`` of the
+``acceptEdits`` command, the stage, and the content hash of the candidate. A
+write that fails is logged and the device goes on: the command is answered as it
+would be, and a later restart does not say that the candidate was lost.
+
+When the device starts and finds the note, it removes it and reports the loss in
+the ``identity`` answer, next to ``retained``:
+
+``candidateLost``
+   Present exactly when the previous run ended with an unfinished edit. ``name``
+   and ``origin`` are present when the ``acceptEdits`` that staged the candidate
+   gave them. ``stage`` is ``accepted``, ``testing`` or ``testingMigration``, and
+   is absent when the note was damaged and could not be read, so that only the
+   loss is known. A device that predates the field omits it.
+
+   .. code-block:: json
+
+      {"candidateLost": {"name": "fix pump", "origin": "studio on WS-12", "stage": "testing"}}
+
+The device never restores the candidate from the note, and the next start reports
+nothing, because the note is gone.
 
 .. _ironplcvm-discovery:
 

@@ -110,7 +110,8 @@
         "command": "test",
         "label": "Test"
       },
-      "stage": "accepted"
+      "stage": "accepted",
+      "warning": "a restart of the device loses this candidate"
     }
   },
   {
@@ -167,7 +168,8 @@
         "command": "test",
         "label": "Test"
       },
-      "stage": "accepted"
+      "stage": "accepted",
+      "warning": "a restart of the device loses this candidate"
     }
   },
   {
@@ -187,12 +189,12 @@
           "label": "Assemble"
         },
         "cancel": {
-          "enabled": false,
+          "enabled": true,
           "label": "Cancel",
-          "reason": {
-            "code": "V4015",
-            "text": "operation not allowed in the current hot-edit phase"
-          }
+          "steps": [
+            "untest",
+            "cancel"
+          ]
         },
         "finalizeAll": {
           "enabled": false,
@@ -224,7 +226,8 @@
         "command": "assemble",
         "label": "Assemble"
       },
-      "stage": "testing"
+      "stage": "testing",
+      "warning": "a restart of the device loses this candidate"
     }
   },
   {
@@ -247,8 +250,8 @@
           "enabled": false,
           "label": "Cancel",
           "reason": {
-            "code": "V4015",
-            "text": "operation not allowed in the current hot-edit phase"
+            "code": "V4011",
+            "text": "untest and cancel are not supported after a schema-changing test; assemble instead"
           }
         },
         "finalizeAll": {
@@ -277,7 +280,7 @@
           "label": "Untest",
           "reason": {
             "code": "V4011",
-            "text": "untest is not supported after a schema-changing test; assemble or cancel instead"
+            "text": "untest and cancel are not supported after a schema-changing test; assemble instead"
           }
         }
       },
@@ -285,7 +288,8 @@
         "command": "assemble",
         "label": "Assemble"
       },
-      "stage": "testingMigration"
+      "stage": "testingMigration",
+      "warning": "a restart of the device loses this candidate"
     }
   },
   {
@@ -346,7 +350,8 @@
           }
         }
       },
-      "stage": "swapPending"
+      "stage": "swapPending",
+      "warning": "a restart of the device loses this candidate"
     }
   },
   {
@@ -407,7 +412,8 @@
           }
         }
       },
-      "stage": "swapPending"
+      "stage": "swapPending",
+      "warning": "a restart of the device loses this candidate"
     }
   },
   {
@@ -468,7 +474,8 @@
           }
         }
       },
-      "stage": "swapPending"
+      "stage": "swapPending",
+      "warning": "a restart of the device loses this candidate"
     }
   }
 ]

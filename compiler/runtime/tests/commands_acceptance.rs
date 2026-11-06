@@ -581,8 +581,8 @@ fn untest_edits_when_no_test_in_progress_then_v4014() {
 }
 
 #[test]
-fn cancel_edits_while_testing_then_v4015() {
-    let (mut host, _counter) = counter_host(1);
+fn cancel_edits_while_testing_then_one_ack_and_the_edit_is_over_after_the_boundary() {
+    let (mut host, counter) = counter_host(1);
     run_line(
         &mut host,
         &accept_line(&counter_program("Counter := Counter + 10;")),
@@ -592,8 +592,17 @@ fn cancel_edits_while_testing_then_v4015() {
 
     let response = run_line(&mut host, r#"{"command":"cancelEdits"}"#);
 
-    assert_eq!(response["response"], "error");
-    assert_eq!(response["vCode"], "V4015");
+    assert_eq!(response["response"], "ack");
+    let waiting = run_line(&mut host, r#"{"command":"getStatus"}"#);
+    assert_eq!(waiting["edit"]["stage"], "swapPending");
+    host.run(1, || 0).unwrap();
+    let status = run_line(&mut host, r#"{"command":"getStatus"}"#);
+    assert_eq!(status["mode"], "normal");
+    assert_eq!(status["edit"]["stage"], "idle");
+    assert!(status["candidate"].is_null());
+    // The original runs again from the current state: one test round at +10,
+    // then one round of the original at +1.
+    assert_eq!(host.read_variable(counter).unwrap(), 11);
 }
 
 #[test]
@@ -659,6 +668,7 @@ fn identity_when_fresh_host_then_device_panel_and_live_status_snapshot() {
             redundancy: None,
             persisted_content_hash: None,
             retained: None,
+            candidate_lost: None,
             fault: None,
             run_state: RunState::Running,
         }))

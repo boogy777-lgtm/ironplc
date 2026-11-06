@@ -104,7 +104,11 @@ read whether the controller is running edited code:
 Transitions that leave the happy path render as their lifecycle outcome:
 discarding local edits returns to MONITORING; untest returns from TESTING
 to STAGED; cancel drops the candidate and re-syncs the project from the
-device, returning to MONITORING.
+device, returning to MONITORING. Cancel is offered in TESTING too (a logic-only
+candidate): the device reverts and discards in one command, and the client
+sends it once. The banner shows the `warning` of the edit view while a candidate
+exists: a restart of the device loses it. If the device restarted, its `identity`
+carries `candidateLost` and the client says so; the engineer repeats the edit.
 
 ## Safety Property
 

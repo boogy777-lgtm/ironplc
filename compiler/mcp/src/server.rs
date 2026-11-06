@@ -339,7 +339,7 @@ impl IronPlcMcp {
     /// Reports the hot-edit state of the running application.
     #[tool(
         name = "hot_edit_status",
-        description = "Reports the hot-edit state of the running application: the active mode (normal or testing), the logic and application generation counters, whether a candidate edit is staged, and completed scan rounds. Fails with a diagnostic until `hot_edit_accept` has started a session. Pass `device` (`{address, port}` for a TCP connection, or `{device_id}` for a device that IronLink has a route to, see `browse_network`) to act on a device over the session protocol instead of the server's own session; the response then names the device that answered in `device`."
+        description = "Reports the hot-edit state of the running application: the active mode (normal or testing), the logic and application generation counters, whether a candidate edit is staged, and completed scan rounds. The status carries `edit`, which the device builds: the `stage` of the edit, and for each command (`accept`, `test`, `untest`, `assemble`, `cancel`, `finalizeAll`) whether the device allows it now with its `label` and, when it does not, the `reason` (V-code and text) it would refuse with, and `warning` while a candidate exists (a candidate lives in RAM only and a restart of the device loses it). Every `hot_edit_*` response carries the same `status`, a refusal included. Fails with a diagnostic until `hot_edit_accept` has started a session. Pass `device` (`{address, port}` for a TCP connection, or `{device_id}` for a device that IronLink has a route to, see `browse_network`) to act on a device over the session protocol instead of the server's own session; the response then names the device that answered in `device`."
     )]
     async fn hot_edit_status(
         &self,
@@ -356,7 +356,7 @@ impl IronPlcMcp {
     /// Compiles sources and feeds them to the hot-edit protocol.
     #[tool(
         name = "hot_edit_accept",
-        description = "Compiles the supplied IEC sources and hands them to the hot-edit protocol. The first call establishes the running application session and reports `established`; each later call stages the compiled program as an edit candidate to activate with `hot_edit_test` and promote with `hot_edit_assemble`, or discard with `hot_edit_cancel`. With `device` the candidate is staged on that device, which already runs a program, and the result is `ack`. Compilation failures return the usual diagnostics; staging refusals return a stable V-code such as V4007 (layout change) or V4013 (candidate already staged). A V4010 refusal carries a `pairs` list of out-of-policy type changes; resubmit the identical sources with the `migration` map (`uid -> \"init\" | \"preserve\"`) to resolve them. Pass `device` (`{address, port}` for a TCP connection, or `{device_id}` for a device that IronLink has a route to, see `browse_network`) to act on a device over the session protocol instead of the server's own session; the response then names the device that answered in `device`."
+        description = "Compiles the supplied IEC sources and hands them to the hot-edit protocol. The first call establishes the running application session and reports `established`; each later call stages the compiled program as an edit candidate to activate with `hot_edit_test` and, once it has run under test, promote with `hot_edit_assemble`, or discard with `hot_edit_cancel`. With `device` the candidate is staged on that device, which already runs a program, and the result is `ack`. Compilation failures return the usual diagnostics; staging refusals return a stable V-code such as V4007 (layout change) or V4013 (candidate already staged). A V4010 refusal carries a `pairs` list of out-of-policy type changes; resubmit the identical sources with the `migration` map (`uid -> \"init\" | \"preserve\"`) to resolve them. Pass `device` (`{address, port}` for a TCP connection, or `{device_id}` for a device that IronLink has a route to, see `browse_network`) to act on a device over the session protocol instead of the server's own session; the response then names the device that answered in `device`."
     )]
     async fn hot_edit_accept(
         &self,
@@ -403,7 +403,7 @@ impl IronPlcMcp {
     /// Reverts to the original artifact.
     #[tool(
         name = "hot_edit_untest",
-        description = "Switches back to the original artifact at the next scan boundary and drives one scan round, so the revert is executing when the call returns; process state is preserved. Refused with V4011 after a schema-changing test \u{2014} promote with `hot_edit_assemble` or discard with `hot_edit_cancel` instead. Pass `device` (`{address, port}` for a TCP connection, or `{device_id}` for a device that IronLink has a route to, see `browse_network`) to act on a device over the session protocol instead of the server's own session; the response then names the device that answered in `device`."
+        description = "Switches back to the original artifact at the next scan boundary and drives one scan round, so the revert is executing when the call returns; process state is preserved. Refused with V4011 after a schema-changing test \u{2014} promote with `hot_edit_assemble` instead. Pass `device` (`{address, port}` for a TCP connection, or `{device_id}` for a device that IronLink has a route to, see `browse_network`) to act on a device over the session protocol instead of the server's own session; the response then names the device that answered in `device`."
     )]
     async fn hot_edit_untest(
         &self,
@@ -420,7 +420,7 @@ impl IronPlcMcp {
     /// Promotes the staged candidate.
     #[tool(
         name = "hot_edit_assemble",
-        description = "Promotes the staged candidate to the running application and drives one scan round, so the promoted program is executing when the call returns. Works from both the staged and the testing phases. Refusals carry a stable V-code, e.g. V4012 when no candidate is staged. Pass `device` (`{address, port}` for a TCP connection, or `{device_id}` for a device that IronLink has a route to, see `browse_network`) to act on a device over the session protocol instead of the server's own session; the response then names the device that answered in `device`."
+        description = "Promotes the staged candidate to the running application and drives one scan round, so the promoted program is executing when the call returns. The candidate must have run under `hot_edit_test`: from the staged phase the device refuses with V4017. Refusals carry a stable V-code, e.g. V4012 when no candidate is staged. Pass `device` (`{address, port}` for a TCP connection, or `{device_id}` for a device that IronLink has a route to, see `browse_network`) to act on a device over the session protocol instead of the server's own session; the response then names the device that answered in `device`."
     )]
     async fn hot_edit_assemble(
         &self,
@@ -437,7 +437,7 @@ impl IronPlcMcp {
     /// Discards the staged candidate.
     #[tool(
         name = "hot_edit_cancel",
-        description = "Discards the staged candidate while the original artifact keeps running. Takes effect immediately. Refused with V4015 while a candidate test is in progress. Pass `device` (`{address, port}` for a TCP connection, or `{device_id}` for a device that IronLink has a route to, see `browse_network`) to act on a device over the session protocol instead of the server's own session; the response then names the device that answered in `device`."
+        description = "Discards the staged candidate. While the original artifact runs it takes effect immediately. While a logic-only candidate runs under test, the device reverts to the original artifact at the next scan boundary and discards the candidate there, and the call drives one scan round, so the edit is over when it returns. Refused with V4011 while a schema-changing (migration) candidate runs under test: promote it with `hot_edit_assemble`. Pass `device` (`{address, port}` for a TCP connection, or `{device_id}` for a device that IronLink has a route to, see `browse_network`) to act on a device over the session protocol instead of the server's own session; the response then names the device that answered in `device`."
     )]
     async fn hot_edit_cancel(
         &self,

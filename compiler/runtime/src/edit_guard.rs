@@ -15,11 +15,19 @@
 //!
 //! The table is exhaustive: a new state or a new command that has no row does
 //! not compile.
+//!
+//! A row answers with the *steps* of the command: nothing ([`ITSELF`]) when
+//! the command is a single operation, or the commands the host runs for it
+//! when it takes several. The only row with steps today is Cancel while the
+//! candidate executes under Test: the host reverts to the original artifact at
+//! the next scan boundary (untest) and discards the candidate there (cancel),
+//! and the client sends `cancelEdits` once. A new exit that takes several
+//! steps is one such row.
 
 use serde::{Deserialize, Serialize};
 
 use crate::error::OnlineChangeError;
-use crate::host::PendingSwap;
+use crate::host::{PendingEditRecord, PendingSwap};
 
 /// Where the unfinished edit of a host stands, derived from its fields by
 /// [`edit_state`].
@@ -42,6 +50,21 @@ pub(crate) enum EditState {
     /// migration candidate is refused, so this state never has a migration.
     UntestPending,
 }
+
+/// The commands the host runs for one command in one state, in order. Empty
+/// ([`ITSELF`]) means the command alone.
+///
+/// The first step requests a swap (test or untest) and the others run at the
+/// scan boundary that applies it, each one checked by the table again in the
+/// state the boundary leaves. A step is never accept, which carries a
+/// container; a unit test checks both rules over the whole table.
+pub(crate) type Steps = &'static [EditCommand];
+
+/// The steps of a command that is a single operation.
+pub(crate) const ITSELF: Steps = &[];
+
+/// Cancel while the candidate executes under Test: revert, then discard.
+const UNTEST_THEN_CANCEL: Steps = &[EditCommand::Untest, EditCommand::Cancel];
 
 /// One of the edit operations of the host. On the wire it is the camelCase
 /// name of the variant (`accept`, `test`, ...).
@@ -125,13 +148,16 @@ pub(crate) fn edit_state(
     }
 }
 
-/// The answer of the hot-edit state machine: whether `command` is allowed in
-/// `state`, and the refusal when it is not.
+/// The answer of the hot-edit state machine: the steps of `command` when it
+/// is allowed in `state`, and the refusal when it is not.
 ///
 /// Where two refusals apply, the table gives the one the host has always
 /// given: a missing candidate first, then a pending swap, then the artifact
 /// that is active.
-pub(crate) fn edit_guard(state: EditState, command: EditCommand) -> Result<(), OnlineChangeError> {
+pub(crate) fn edit_guard(
+    state: EditState,
+    command: EditCommand,
+) -> Result<Steps, OnlineChangeError> {
     use EditCommand::{Accept, Assemble, Cancel, Test, Untest};
     use OnlineChangeError::{
         AssembleWithoutTest, CandidateAlreadyStaged, NoCandidateStaged, NoTestInProgress,
@@ -140,31 +166,35 @@ pub(crate) fn edit_guard(state: EditState, command: EditCommand) -> Result<(), O
 
     match state {
         EditState::NoCandidate => match command {
-            Accept => Ok(()),
+            Accept => Ok(ITSELF),
             Test => Err(NoCandidateStaged),
             Untest => Err(NoTestInProgress),
             Assemble => Err(NoCandidateStaged),
             Cancel => Err(NoCandidateStaged),
         },
         EditState::Accepted { migration: _ } => match command {
-            Accept => Err(CandidateAlreadyStaged),
-            Test => Ok(()),
+            Accept => Err(CandidateAlreadyStaged(None)),
+            Test => Ok(ITSELF),
             Untest => Err(NoTestInProgress),
             // The candidate never ran under Test (ADR-0064).
             Assemble => Err(AssembleWithoutTest),
-            Cancel => Ok(()),
+            Cancel => Ok(ITSELF),
         },
         EditState::Testing { migration } => match command {
-            Accept => Err(CandidateAlreadyStaged),
+            Accept => Err(CandidateAlreadyStaged(None)),
             Test => Err(NotAllowedInThisMode),
-            // A migration candidate has no revert path.
+            // A migration candidate has no revert path, and discarding it
+            // would be one: the old buffers are not kept.
             Untest if migration => Err(UntestUnsupported),
-            Untest => Ok(()),
-            Assemble => Ok(()),
-            Cancel => Err(NotAllowedInThisMode),
+            Untest => Ok(ITSELF),
+            Assemble => Ok(ITSELF),
+            Cancel if migration => Err(UntestUnsupported),
+            // A logic-only candidate is reverted first (untest), then
+            // discarded at the boundary that applied the revert.
+            Cancel => Ok(UNTEST_THEN_CANCEL),
         },
         EditState::TestPending { migration: _ } => match command {
-            Accept => Err(CandidateAlreadyStaged),
+            Accept => Err(CandidateAlreadyStaged(None)),
             Test => Err(NotAllowedInThisMode),
             // The candidate is not active, so there is no test to revert.
             Untest => Err(NoTestInProgress),
@@ -172,13 +202,26 @@ pub(crate) fn edit_guard(state: EditState, command: EditCommand) -> Result<(), O
             Cancel => Err(NotAllowedInThisMode),
         },
         EditState::UntestPending => match command {
-            Accept => Err(CandidateAlreadyStaged),
+            Accept => Err(CandidateAlreadyStaged(None)),
             Test => Err(NotAllowedInThisMode),
             Untest => Err(NotAllowedInThisMode),
             Assemble => Err(NotAllowedInThisMode),
             Cancel => Err(NotAllowedInThisMode),
         },
     }
+}
+
+/// The answer of the table as the host gives it and the edit view shows it:
+/// [`edit_guard`], with the refusal about the staged edit naming that edit
+/// when the accept that staged it did (`pending`). The one place the two read
+/// the table, so the refusal a command gets and the reason the view gives are
+/// the same text.
+pub(crate) fn edit_answer(
+    state: EditState,
+    command: EditCommand,
+    pending: Option<&PendingEditRecord>,
+) -> Result<Steps, OnlineChangeError> {
+    edit_guard(state, command).map_err(|refusal| refusal.naming(pending))
 }
 
 #[cfg(test)]
@@ -212,6 +255,45 @@ mod tests {
             .map(EditCommand::label)
             .collect();
         assert_eq!(labels, ["Accept", "Test", "Untest", "Assemble", "Cancel"]);
+    }
+
+    /// Every state, with both values of the migration flag where it counts.
+    const ALL_STATES: [EditState; 8] = [
+        EditState::NoCandidate,
+        EditState::Accepted { migration: false },
+        EditState::Accepted { migration: true },
+        EditState::Testing { migration: false },
+        EditState::Testing { migration: true },
+        EditState::TestPending { migration: false },
+        EditState::TestPending { migration: true },
+        EditState::UntestPending,
+    ];
+
+    #[test]
+    fn edit_guard_when_a_row_has_steps_then_the_first_requests_a_swap_and_none_is_accept() {
+        let rows: Vec<Steps> = ALL_STATES
+            .into_iter()
+            .flat_map(|state| {
+                EditCommand::ALL
+                    .into_iter()
+                    .map(move |command| edit_guard(state, command))
+            })
+            .filter_map(Result::ok)
+            .filter(|steps| !steps.is_empty())
+            .collect();
+
+        assert!(!rows.is_empty());
+        for steps in rows {
+            assert!(matches!(steps[0], EditCommand::Test | EditCommand::Untest));
+            assert!(!steps.contains(&EditCommand::Accept));
+        }
+    }
+
+    #[test]
+    fn edit_guard_when_cancel_in_testing_then_untest_then_cancel() {
+        let steps = edit_guard(EditState::Testing { migration: false }, EditCommand::Cancel);
+
+        assert_eq!(steps, Ok(&[EditCommand::Untest, EditCommand::Cancel][..]));
     }
 
     #[test]

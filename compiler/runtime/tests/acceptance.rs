@@ -470,8 +470,56 @@ fn stage_when_candidate_already_staged_then_candidate_already_staged_error() {
 
     assert!(matches!(
         result,
-        Err(OnlineChangeError::CandidateAlreadyStaged)
+        Err(OnlineChangeError::CandidateAlreadyStaged(None))
     ));
+}
+
+#[test]
+fn stage_when_staged_edit_has_name_and_origin_then_the_refusal_names_the_edit() {
+    let (mut host, _counter) = counter_host(1);
+    host.stage_with_decisions(
+        compile_source(&counter_program("Counter := Counter + 10;")),
+        &BTreeMap::new(),
+        Some(AcceptedEdit {
+            wire: Vec::new(),
+            name: Some("fix pump".to_string()),
+            origin: Some("studio on WS-12".to_string()),
+        }),
+    )
+    .unwrap();
+
+    let refusal = host
+        .stage(compile_source(&counter_program("Counter := Counter + 20;")))
+        .unwrap_err();
+
+    assert_eq!(
+        refusal.to_string(),
+        "a candidate is already staged: edit \"fix pump\" from \"studio on WS-12\""
+    );
+}
+
+#[test]
+fn stage_when_staged_edit_has_only_an_origin_then_the_refusal_names_the_origin() {
+    let (mut host, _counter) = counter_host(1);
+    host.stage_with_decisions(
+        compile_source(&counter_program("Counter := Counter + 10;")),
+        &BTreeMap::new(),
+        Some(AcceptedEdit {
+            wire: Vec::new(),
+            name: None,
+            origin: Some("studio on WS-12".to_string()),
+        }),
+    )
+    .unwrap();
+
+    let refusal = host
+        .stage(compile_source(&counter_program("Counter := Counter + 20;")))
+        .unwrap_err();
+
+    assert_eq!(
+        refusal.to_string(),
+        "a candidate is already staged: an edit from \"studio on WS-12\""
+    );
 }
 
 #[test]
@@ -497,17 +545,54 @@ fn untest_when_candidate_not_active_then_no_test_in_progress_error() {
 }
 
 #[test]
-fn cancel_when_testing_then_not_allowed_in_this_mode_error() {
+fn cancel_when_testing_then_candidate_is_discarded_at_the_boundary_and_state_stays_current() {
+    let (mut host, counter) = counter_host(1);
+    host.run(100, || 0).unwrap();
+    host.stage(compile_source(&counter_program("Counter := Counter + 10;")))
+        .unwrap();
+    host.test().unwrap();
+    host.run(3, || 0).unwrap();
+    assert_eq!(host.read_variable(counter).unwrap(), 130);
+
+    // One command; the edit is not over until the boundary has passed.
+    host.cancel().unwrap();
+    assert!(host.swap_pending());
+    assert!(host.status().candidate.is_some());
+    host.run(1, || 0).unwrap();
+
+    let status = host.status();
+    assert_eq!(status.mode, HostMode::Normal);
+    assert_eq!(status.candidate, None);
+    assert_eq!(status.pending_edit, None);
+    assert!(!host.swap_pending());
+    // The revert keeps the process state; the original runs from there.
+    assert_eq!(host.read_variable(counter).unwrap(), 131);
+}
+
+#[test]
+fn cancel_when_testing_and_permit_revoked_before_boundary_then_nothing_is_applied_or_dropped() {
     let (mut host, _counter) = counter_host(1);
     host.stage(compile_source(&counter_program("Counter := Counter + 10;")))
         .unwrap();
     host.test().unwrap();
     host.run(1, || 0).unwrap();
+    host.cancel().unwrap();
+    host.revoke_execution_permit();
 
-    assert!(matches!(
-        host.cancel(),
-        Err(OnlineChangeError::NotAllowedInThisMode)
-    ));
+    let error = host.run(1, || 0).unwrap_err();
+
+    // The revert was not applied, so its second step is dropped with it: the
+    // candidate still executes and the edit can be finished again.
+    assert!(matches!(error, RuntimeError::NotPermitted));
+    let status = host.status();
+    assert_eq!(status.mode, HostMode::Testing);
+    assert!(status.candidate.is_some());
+    host.permit_execution();
+    host.run(1, || 0).unwrap();
+    assert_eq!(host.status().mode, HostMode::Testing);
+    host.cancel().unwrap();
+    host.run(1, || 0).unwrap();
+    assert_eq!(host.status().candidate, None);
 }
 
 #[test]

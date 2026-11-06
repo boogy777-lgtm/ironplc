@@ -2,6 +2,7 @@
 
 status: accepted
 date: 2026-11-06
+amended: 2026-11-06 (stages 4b-4d landed: the defects named in "What is not in this stage" are fixed, see "Exits fixed in class K1")
 
 ## Context and Problem Statement
 
@@ -131,6 +132,78 @@ naming the edit, the occupied-flag guard of a drop, and the false comments about
 the table. Stage 4d adds the note that the candidate was lost. Until then the
 view reports what the table says, including its known defects, and a change of
 the table changes the view and the golden file with it.
+
+## Exits fixed in class K1 (stage 4b-4d)
+
+The audit defects that the view only made visible are fixed in the class, as the
+owner decided: the runtime gives the allowed commands for each state, and the
+clients only show them. The invariant for every member of the class: every
+state with a candidate has at least one exit that the host accepts (cancel or
+assemble; a state that waits for a scan boundary has the boundary), the allowed
+set of the view equals the host's, no client sequences the commands of an edit
+on its own, and the end of a session never changes the edit.
+
+**Cells of the table.**
+
+| State | Command | Before | After |
+|---|---|---|---|
+| Testing (logic-only) | Cancel | refused, V4015 | allowed, steps untest then cancel |
+| Testing (migration) | Cancel | refused, V4015 | refused, V4011 (no revert, the old buffers are not kept) |
+
+The text of V4011 now says that untest and cancel are not supported and that
+assemble is the exit. Walk test and golden file follow.
+
+**Steps in the table.** `edit_guard` answers with the steps of a command (`Steps`,
+empty for a command that is one operation). Cancel in Testing has the steps untest
+and cancel; the view lists them in the `steps` of that command, and `finalizeAll`
+is a plain command view with its steps (the wire is as before). The two kinds of
+steps differ in who runs them: the device runs the steps of an edit command, the
+client runs those of `finalizeAll`. The host runs the first step when the command
+arrives (it requests a swap) and keeps the rest; the boundary that applies the swap
+runs them, each one through the table again in the state the boundary leaves. A
+boundary that does not apply the swap (the permit was revoked) drops the rest with
+it. The client sends `cancelEdits` once. The device loop (and the in-process MCP
+session) answers after the boundary, because any command that leaves a swap pending
+waits for it (`RuntimeHost::swap_pending`), so the one acknowledgment means the
+edit is over; until then the view says `swapPending`. The mirror of a pair applies
+its own boundary after a cancel notice. A new exit with several steps is one row
+and its steps; a unit test checks that every row's steps start with a swap request
+and never contain accept.
+
+**V4013 names the edit.** The refusal of a second accept says `a candidate is already
+staged: edit "fix pump" from "studio on WS-12"` when the accept that staged the
+candidate gave a name, an origin or both (`StagedEdit`). The table answers with the
+bare refusal; `edit_answer` adds the edit from the pending-edit record, and both the
+host and the view read the table through it, so the refusal and the reason are one
+text. The code stays V4013.
+
+**The claim of a session is a value.** The occupied flag of the TCP session is held
+by `SessionClaim`, whose drop frees the device, so a panic of the session thread
+frees it as well and the device cannot refuse every client with V6014 for ever. The
+claim is dropped before the socket, as the normal end releases it. A session end
+never touches the edit: tests end a session by a clean EOF, by a drop in the middle
+of a frame and by a panic, and read the edit as the next client
+(REQ-VC-vm-cli-055).
+
+**MCP reads the view.** Every hot-edit response that reached the host carries its
+status with the `edit` view, a refusal included (one more round trip on a refusal
+only). The code and text of a refusal are the host's and equal the reason of that
+command in the view; the tool computes no enablement and sends the command even when
+the last status says it is disabled.
+
+**Candidate lost.** A candidate lives in RAM only (owner decision). The device keeps
+a note of the unfinished edit in `<file>.edit` beside the slots (the name and origin
+of the accept, the stage and the content hash of the candidate), written atomically
+when a candidate is accepted, rewritten when the stage changes and removed when the
+edit ends. At boot the device reads the note, removes it, and reports
+`candidateLost { name?, origin?, stage? }` in the `identity` answer next to
+`retained` (`stage` is absent when the note was damaged). It never restores the
+candidate. A write of the note that fails is logged and does not change the answer of
+the command, so there is no new V-code: the note is advisory, and an accept answered
+with an error while the candidate is staged would mislead; the cost is that a
+restart does not say the candidate was lost. While a candidate exists the edit view
+carries `warning`: `a restart of the device loses this candidate`
+(REQ-VC-vm-cli-056, REQ-VC-vm-cli-057).
 
 ## Pros and Cons of the Options
 

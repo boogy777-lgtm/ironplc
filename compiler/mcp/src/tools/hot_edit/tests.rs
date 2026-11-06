@@ -230,6 +230,43 @@ fn build_accept_response_when_candidate_already_staged_then_v4013() {
 }
 
 #[test]
+fn build_accept_response_when_refused_then_the_message_is_the_reason_the_edit_view_gives() {
+    let (cache, session) = make_state();
+    session_with_staged_candidate(&cache, &session, "Counter := Counter + 10;");
+
+    let second = counter_variant("Counter := Counter + 20;");
+    let resp = build_accept_response(&source(&second), &ed2_options(), &cache, &session);
+
+    // One text, the host's: the refusal is the reason of the command in the
+    // view that the same response carries, and the tool computes nothing.
+    let view = resp.status.unwrap().edit.unwrap();
+    let reason = view.commands.edit[&ironplc_runtime::EditCommand::Accept]
+        .reason
+        .clone()
+        .unwrap();
+    assert_eq!(resp.v_code, Some(reason.code));
+    assert_eq!(resp.message, Some(reason.text));
+    assert_eq!(view.stage, ironplc_runtime::EditStage::Accepted);
+}
+
+#[test]
+fn build_test_response_when_candidate_staged_then_the_response_carries_the_edit_view_and_its_warning(
+) {
+    let (cache, session) = make_state();
+    session_with_staged_candidate(&cache, &session, "Counter := Counter + 10;");
+
+    let resp = build_test_response(&session);
+
+    let view = resp.status.unwrap().edit.unwrap();
+    assert_eq!(view.stage, ironplc_runtime::EditStage::Testing);
+    assert!(view.commands.edit[&ironplc_runtime::EditCommand::Cancel].enabled);
+    assert_eq!(
+        view.warning.as_deref(),
+        Some("a restart of the device loses this candidate")
+    );
+}
+
+#[test]
 fn build_status_response_when_no_session_then_p8001_diagnostic() {
     let (_cache, session) = make_state();
 
@@ -663,7 +700,7 @@ fn build_cancel_response_when_candidate_staged_then_discards_candidate() {
 }
 
 #[test]
-fn build_cancel_response_while_testing_then_v4015() {
+fn build_cancel_response_while_testing_then_the_candidate_is_reverted_and_discarded_in_one_call() {
     let (cache, session) = make_state();
     session_with_staged_candidate(&cache, &session, "Counter := Counter + 10;");
     let tested = build_test_response(&session);
@@ -671,8 +708,11 @@ fn build_cancel_response_while_testing_then_v4015() {
 
     let resp = build_cancel_response(&session);
 
-    assert!(!resp.ok);
-    assert_eq!(resp.v_code.as_deref(), Some("V4015"));
+    assert!(resp.ok, "{:?} {:?}", resp.v_code, resp.message);
+    let status = resp.status.unwrap();
+    assert_eq!(status.mode, HostMode::Normal);
+    assert_eq!(status.candidate, None);
+    assert_eq!(status.edit.unwrap().stage, ironplc_runtime::EditStage::Idle);
 }
 
 #[test]

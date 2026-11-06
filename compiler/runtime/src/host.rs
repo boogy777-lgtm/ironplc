@@ -26,8 +26,8 @@
 //! fresh and initialized by the candidate's init image, then the migration
 //! plan copies the values of the entities both containers share. A migration candidate
 //! has no untest path: writes made under the candidate's layout have no
-//! reverse mapping for added or removed variables, so it can only be
-//! assembled or discarded while the original is active.
+//! reverse mapping for added or removed variables, so once it executes it can
+//! only be assembled (cancel would be a revert, which is refused as well).
 //!
 //! `run` never holds a [`VmRunning`](ironplc_vm::VmRunning) borrow across a
 //! mutation of the host fields: the VM borrows the active container and the
@@ -41,7 +41,7 @@ use ironplc_container::integrity::HASH_LEN;
 use ironplc_container::{Container, InstanceId, TaskId, VarIndex};
 use ironplc_vm::{earliest_due_us, rearm_cyclic_deadlines, FaultContext, Vm, VmBuffers};
 
-use crate::edit_guard::{edit_guard, edit_state, EditCommand, EditState};
+use crate::edit_guard::{edit_answer, edit_state, EditCommand, EditState, Steps, ITSELF};
 use crate::error::{OnlineChangeError, RuntimeError};
 use crate::generation::{ApplicationGeneration, LogicGeneration};
 use crate::migration::{MigrationDecision, StateMigrationPlan};
@@ -148,6 +148,10 @@ pub struct HostStatus {
     pub rounds: u64,
     /// The pending-edit record written at Accept, if a candidate is staged.
     pub pending_edit: Option<PendingEditRecord>,
+    /// The `content_hash` of the staged candidate's header, if one is staged;
+    /// the all-zero hash means the writer of the container computed none. What
+    /// a device that keeps a note of the unfinished edit writes into it.
+    pub candidate_content_hash: Option<[u8; HASH_LEN]>,
     /// The `content_hash` of the normal artifact's header, as the host loaded
     /// it. The host does not recompute it; the all-zero hash means the writer
     /// of the container computed none.
@@ -208,6 +212,10 @@ pub struct RuntimeHost {
     next_logic_generation: u32,
     application_generation: ApplicationGeneration,
     pending: Option<PendingSwap>,
+    /// The steps of a command that follow the pending swap: they run at the
+    /// boundary that applies it, and are dropped with it when the boundary
+    /// does not apply it. Empty unless `pending` is set.
+    after_swap: Steps,
     migration: Option<StateMigrationPlan>,
     execution_permitted: bool,
 }
@@ -243,6 +251,7 @@ impl RuntimeHost {
             next_logic_generation: 2,
             application_generation: ApplicationGeneration::new(1),
             pending: None,
+            after_swap: ITSELF,
             migration: None,
             execution_permitted: false,
         })
@@ -277,9 +286,48 @@ impl RuntimeHost {
         )
     }
 
-    /// The transition table's answer for `command` in the current edit state.
-    fn guard(&self, command: EditCommand) -> Result<(), OnlineChangeError> {
-        edit_guard(self.edit_state(), command)
+    /// The transition table's answer for `command` in the current edit state:
+    /// its steps, or the refusal.
+    fn guard(&self, command: EditCommand) -> Result<Steps, OnlineChangeError> {
+        edit_answer(self.edit_state(), command, self.pending_edit.as_ref())
+    }
+
+    /// Carries out `command` as the table says. A command with steps runs the
+    /// first one now (it requests a swap) and leaves the others for the
+    /// boundary that applies it ([`Self::apply_pending_swap`]), so the client
+    /// sent one command and the device runs all its steps.
+    fn perform(&mut self, command: EditCommand) -> Result<(), OnlineChangeError> {
+        let steps = self.guard(command)?;
+        let Some((first, rest)) = steps.split_first() else {
+            return self.effect(command);
+        };
+        self.effect(*first)?;
+        self.after_swap = rest;
+        Ok(())
+    }
+
+    /// What one command does once the table has allowed it. Accept is not
+    /// here: it carries a container and no row of the table has it as a step.
+    fn effect(&mut self, command: EditCommand) -> Result<(), OnlineChangeError> {
+        match command {
+            EditCommand::Accept => Err(OnlineChangeError::NotAllowedInThisMode),
+            EditCommand::Test => {
+                self.pending = Some(PendingSwap::Test);
+                Ok(())
+            }
+            EditCommand::Untest => {
+                self.pending = Some(PendingSwap::Untest);
+                Ok(())
+            }
+            EditCommand::Assemble => {
+                self.promote_candidate();
+                Ok(())
+            }
+            EditCommand::Cancel => {
+                self.discard_candidate();
+                Ok(())
+            }
+        }
     }
 
     /// Stages `candidate` after validating it against the normal artifact.
@@ -357,9 +405,7 @@ impl RuntimeHost {
 
     /// Requests that the candidate become active at the next scan boundary.
     pub fn test(&mut self) -> Result<(), OnlineChangeError> {
-        self.guard(EditCommand::Test)?;
-        self.pending = Some(PendingSwap::Test);
-        Ok(())
+        self.perform(EditCommand::Test)
     }
 
     /// Requests that the normal artifact become active at the next boundary.
@@ -370,11 +416,9 @@ impl RuntimeHost {
     /// A migration candidate has no revert path: its buffers were rebuilt
     /// under a new layout, so `untest` is refused with
     /// [`OnlineChangeError::UntestUnsupported`] and the state is left
-    /// unchanged. Assemble or cancel while the original is active instead.
+    /// unchanged. Assemble instead.
     pub fn untest(&mut self) -> Result<(), OnlineChangeError> {
-        self.guard(EditCommand::Untest)?;
-        self.pending = Some(PendingSwap::Untest);
-        Ok(())
+        self.perform(EditCommand::Untest)
     }
 
     /// Promotes the candidate to the normal artifact and drops the old one.
@@ -389,8 +433,11 @@ impl RuntimeHost {
     /// committed latch for the shell to persist (see
     /// [`take_committed_wire`](Self::take_committed_wire)).
     pub fn assemble(&mut self) -> Result<(), OnlineChangeError> {
-        self.guard(EditCommand::Assemble)?;
+        self.perform(EditCommand::Assemble)
+    }
 
+    /// The promotion of [`assemble`](Self::assemble), once the table allowed it.
+    fn promote_candidate(&mut self) {
         if let Some(next) = self.candidate.take() {
             self.normal = next;
             self.committed_wire = self.candidate_wire.take();
@@ -403,18 +450,35 @@ impl RuntimeHost {
             self.application_generation =
                 ApplicationGeneration::new(self.application_generation.raw().saturating_add(1));
         }
-        Ok(())
     }
 
-    /// Discards the staged candidate while the normal artifact is active.
+    /// Discards the staged candidate.
+    ///
+    /// While the original artifact is active this takes effect at once. While
+    /// a logic-only candidate executes under Test, the host first reverts to
+    /// the original (untest) and discards the candidate at the scan boundary
+    /// that applied the revert: one command with two steps (the table of
+    /// [`crate::edit_guard`]), so the edit is over when the boundary has
+    /// passed. A candidate of a state migration under Test is refused, see
+    /// [`OnlineChangeError::UntestUnsupported`].
     pub fn cancel(&mut self) -> Result<(), OnlineChangeError> {
-        self.guard(EditCommand::Cancel)?;
+        self.perform(EditCommand::Cancel)
+    }
+
+    /// The discard of [`cancel`](Self::cancel), once the table allowed it.
+    fn discard_candidate(&mut self) {
         self.candidate = None;
         self.candidate_wire = None;
         self.pending_edit = None;
         self.candidate_generation = None;
         self.migration = None;
-        Ok(())
+    }
+
+    /// Whether a requested swap waits for the next scan boundary. A command
+    /// that leaves one is finished only after that boundary: the device loop
+    /// answers it then, and the edit view reports `swapPending` until then.
+    pub fn swap_pending(&self) -> bool {
+        self.pending.is_some()
     }
 
     /// Returns the host's current hot-edit state.
@@ -436,6 +500,10 @@ impl RuntimeHost {
             migration: self.migration.is_some(),
             rounds: self.rounds,
             pending_edit: self.pending_edit.clone(),
+            candidate_content_hash: self
+                .candidate
+                .as_ref()
+                .map(|candidate| candidate.header.content_hash),
             content_hash: self.normal.header.content_hash,
             layout_hash: self.normal.header.layout_hash,
             edit_state: self.edit_state(),
@@ -820,6 +888,8 @@ impl RuntimeHost {
         let Some(swap) = self.pending.take() else {
             return Ok(());
         };
+        // Taken with the swap: a boundary that does not apply it drops them.
+        let then = std::mem::replace(&mut self.after_swap, ITSELF);
         if revalidate_permit && !self.execution_permitted {
             return Err(RuntimeError::NotPermitted);
         }
@@ -843,7 +913,18 @@ impl RuntimeHost {
                 self.active_is_candidate = false;
                 Ok(())
             }
+        }?;
+        // The rest of the steps of the command that asked for the swap, each
+        // one checked by the table in the state the swap left. The table
+        // allowed the steps when the command was made and nothing can change
+        // the state between that and the boundary, so a refusal here is a
+        // broken invariant.
+        for step in then {
+            self.perform(*step).map_err(|_| {
+                RuntimeError::internal("a step after a swap was refused by the transition table")
+            })?;
         }
+        Ok(())
     }
 
     /// Adopts the migration candidate's freshly initialized buffers with the
