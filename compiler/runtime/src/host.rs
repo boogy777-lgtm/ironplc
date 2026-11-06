@@ -39,7 +39,7 @@ use std::collections::BTreeMap;
 
 use ironplc_container::integrity::HASH_LEN;
 use ironplc_container::{Container, InstanceId, TaskId, VarIndex};
-use ironplc_vm::{earliest_due_us, FaultContext, Vm, VmBuffers};
+use ironplc_vm::{earliest_due_us, rearm_cyclic_deadlines, FaultContext, Vm, VmBuffers};
 
 use crate::edit_guard::{edit_guard, edit_state, EditCommand, EditState};
 use crate::error::{OnlineChangeError, RuntimeError};
@@ -697,6 +697,16 @@ impl RuntimeHost {
     /// freewheeling tasks only): the time a paced driver waits for.
     pub fn next_due_us(&self) -> Option<u64> {
         earliest_due_us(&self.buffers.tasks)
+    }
+
+    /// Restarts the deadlines of the cyclic tasks from `uptime_us`: the call of
+    /// a paced driver that resumes after a gap in which it ran no round (the
+    /// operator stopped the scan, or the permit was revoked). A deadline that
+    /// passed becomes due now, so each task runs once in the next round and the
+    /// gap is neither a burst of missed periods nor a counted overrun. See
+    /// [`rearm_cyclic_deadlines`].
+    pub fn rearm_cyclic_tasks(&mut self, uptime_us: u64) {
+        rearm_cyclic_deadlines(&mut self.buffers.tasks, uptime_us);
     }
 
     /// Whether the host holds the execution permit: the host drives scan
