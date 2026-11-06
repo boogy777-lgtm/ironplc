@@ -17,7 +17,7 @@ mod common;
 
 use common::{compile_with_ids, container_bytes, counter_host, counter_program, variable_index};
 use ironplc_runtime::{
-    execute, parse_command, Command, DeviceIdentity, HostMode, IdentityPayload, Response,
+    execute, parse_command, Command, DeviceIdentity, HostMode, IdentityPayload, Response, RunState,
     RuntimeHost, StatusPayload, SESSION_PROTOCOL_VERSION,
 };
 
@@ -578,6 +578,24 @@ fn set_device_settings_when_host_has_no_settings_then_v4021_and_hot_edit_state_u
     );
 }
 
+#[rstest::rstest]
+#[case::start(r#"{"command":"startScan"}"#)]
+#[case::stop(r#"{"command":"stopScan"}"#)]
+fn scan_control_when_host_has_no_scan_loop_then_v4022_and_hot_edit_state_untouched(
+    #[case] line: &str,
+) {
+    let (mut host, _counter) = counter_host(1);
+
+    let response = run_line(&mut host, line);
+
+    assert_eq!(response["response"], "error");
+    assert_eq!(response["vCode"], "V4022");
+    assert_eq!(
+        run_line(&mut host, r#"{"command":"getStatus"}"#)["mode"],
+        "normal"
+    );
+}
+
 #[test]
 fn identity_when_fresh_host_then_device_panel_and_live_status_snapshot() {
     let (mut host, _counter) = counter_host(1);
@@ -606,6 +624,7 @@ fn identity_when_fresh_host_then_device_panel_and_live_status_snapshot() {
             persisted_content_hash: None,
             retained: None,
             fault: None,
+            run_state: RunState::Running,
         }))
     );
 }

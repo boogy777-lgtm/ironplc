@@ -1,0 +1,42 @@
+=====
+V6019
+=====
+
+.. problem-summary:: V6019
+
+A client sent ``startScan`` to an ``ironplcvm serve`` device that is faulted. A
+round of the program trapped, and the device has run no round since: it is
+*faulted*, it reports the trap in the ``fault`` field of its ``identity``
+answer, and it still answers every command. The device refuses the start and
+stays as it was. The message names the V-code of the trap and the task and the
+program instance that were running.
+
+A start does not clear a fault. The program stopped on a condition of its own
+(a division by zero, an index out of range, a watchdog), and running it again
+from the same state would trap again in the same place, so an acknowledged start
+would claim that the device runs when it does not. The device is restarted to
+clear the fault: it then loads its program, applies the retained values it
+wrote, and scans again. A command that clears a fault without a restart is a
+separate command that does not exist yet.
+
+Stopping a faulted device is allowed. ``stopScan`` leaves the device stopped and
+the fault reported; the start of such a device is refused for the same reason.
+
+Solutions
+---------
+
+1. Read the ``fault`` field of the ``identity`` answer, or the log of the device
+   on stderr, for the V-code of the trap, and fix the cause in the program. A
+   trap code is documented as a V4xxx page.
+2. Send the fixed program with ``acceptEdits`` and ``assembleEdits`` if the layout
+   allows an online change, then restart the device. The fixed program is the one
+   the device loads again.
+3. Restart :program:`ironplcvm serve`, then send ``startScan`` if the device was
+   stopped before the restart; a restarted device is running.
+
+See Also
+--------
+
+- :ref:`ironplcvm-run-stop` --- Run and Stop
+- :doc:`/reference/runtime/problems/V4001` --- an example of the trap that faults a device
+- :doc:`/reference/runtime/problems/V4022` --- the host has no scan to start or stop

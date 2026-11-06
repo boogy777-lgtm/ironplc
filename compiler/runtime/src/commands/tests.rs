@@ -151,6 +151,7 @@ fn identity_response_of(
         persisted_content_hash: None,
         retained: None,
         fault: None,
+        run_state: RunState::Running,
     }))
 }
 
@@ -494,6 +495,8 @@ fn redundancy_block() -> RedundancyIdentity {
     content_hash: Some("9f".repeat(32)),
     layout_hash: Some("3c".repeat(32)),
 }))]
+#[case::run_state_running(Response::RunState { run_state: RunState::Running })]
+#[case::run_state_stopped(Response::RunState { run_state: RunState::Stopped })]
 #[case::coded_error(Response::Error(CommandError::from(OnlineChangeError::NoCandidateStaged)))]
 #[case::type_change_error(Response::Error(CommandError::from(
     OnlineChangeError::MigrationUnsupported(MigrationError::TypeChangeUnsupported {
@@ -568,6 +571,8 @@ fn parse_response_when_not_json_then_error() {
 #[case::untest(Command::UntestEdits)]
 #[case::assemble(Command::AssembleEdits)]
 #[case::cancel(Command::CancelEdits)]
+#[case::start_scan(Command::StartScan)]
+#[case::stop_scan(Command::StopScan)]
 #[case::accept(Command::AcceptEdits {
     program: vec![1, 2, 255],
     edit: Some(EditSpec { name: Some("rung-4".into()), origin: None }),
@@ -657,5 +662,59 @@ fn identity_when_faulted_then_fault_field_round_trips() {
             "instanceId": 5,
         })
     );
+    assert_eq!(parse_response(&line).unwrap(), Response::Identity(payload));
+}
+
+#[test]
+fn parse_command_when_start_scan_and_stop_scan_then_matching_command() {
+    assert_eq!(
+        parse_command(r#"{"command":"startScan"}"#).unwrap(),
+        Command::StartScan
+    );
+    assert_eq!(
+        parse_command(r#"{"command":"stopScan"}"#).unwrap(),
+        Command::StopScan
+    );
+}
+
+#[test]
+fn render_response_when_run_state_then_line_names_the_state() {
+    let line = render_response(&Response::RunState {
+        run_state: RunState::Stopped,
+    })
+    .unwrap();
+
+    assert_eq!(line, r#"{"response":"runState","runState":"stopped"}"#);
+}
+
+#[test]
+fn render_response_when_identity_then_run_state_is_always_reported() {
+    let line = render_response(&identity_response(None)).unwrap();
+    let value: serde_json::Value = serde_json::from_str(&line).unwrap();
+
+    assert_eq!(value["runState"], "running");
+}
+
+#[test]
+fn parse_response_when_identity_lacks_run_state_then_the_device_is_running() {
+    let line = render_response(&identity_response(None)).unwrap();
+    let mut value: serde_json::Value = serde_json::from_str(&line).unwrap();
+    value.as_object_mut().unwrap().remove("runState");
+
+    let parsed = parse_response(&value.to_string()).unwrap();
+
+    assert_eq!(parsed, identity_response(None));
+}
+
+#[test]
+fn identity_when_stopped_then_run_state_round_trips() {
+    let Response::Identity(mut payload) = identity_response(None) else {
+        panic!("identity_response builds an identity");
+    };
+    payload.run_state = RunState::Stopped;
+    let line = render_response(&Response::Identity(payload.clone())).unwrap();
+    let value: serde_json::Value = serde_json::from_str(&line).unwrap();
+
+    assert_eq!(value["runState"], "stopped");
     assert_eq!(parse_response(&line).unwrap(), Response::Identity(payload));
 }

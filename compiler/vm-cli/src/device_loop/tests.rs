@@ -53,6 +53,8 @@ const UNTEST: &str = r#"{"command":"untestEdits"}"#;
 const ASSEMBLE: &str = r#"{"command":"assembleEdits"}"#;
 const IDENTITY: &str = r#"{"command":"identity"}"#;
 const STATUS: &str = r#"{"command":"getStatus"}"#;
+const START: &str = r#"{"command":"startScan"}"#;
+const STOP: &str = r#"{"command":"stopScan"}"#;
 
 /// A device loop on a fake clock, and the ends of its channel and its stop flag.
 struct Rig {
@@ -494,4 +496,241 @@ fn run_when_period_is_long_then_command_is_answered_within_the_stop_poll() {
     stop.store(true, Ordering::Relaxed);
     assert_eq!(runner.join().unwrap(), End::Stopped);
     drop(handle);
+}
+
+/// The run state an `identity` answer reports.
+fn run_state(rig: &mut Rig) -> String {
+    rig.ask(IDENTITY)["runState"].as_str().unwrap().to_string()
+}
+
+#[spec_test(REQ_VC_vm_cli_046)]
+#[test]
+fn step_when_device_boots_then_identity_reports_running() {
+    let mut rig = Rig::over(compile_container(&counter_source(1)));
+
+    assert_eq!(run_state(&mut rig), "running");
+}
+
+#[spec_test(REQ_VC_vm_cli_046)]
+#[spec_test(REQ_VC_vm_cli_047)]
+#[test]
+fn step_when_stopped_then_no_round_runs_and_every_command_is_answered() {
+    let mut rig = Rig::over(compile_container(&counter_source(1)));
+    rig.steps(3);
+
+    let stopped = rig.ask(STOP);
+    let rounds = rig.rounds();
+    rig.steps(5);
+    let status = rig.ask(STATUS);
+    let state = run_state(&mut rig);
+
+    assert_eq!(
+        stopped,
+        serde_json::json!({"response": "runState", "runState": "stopped"})
+    );
+    assert_eq!(rig.rounds(), rounds);
+    assert_eq!(status["rounds"], rounds);
+    assert_eq!(state, "stopped");
+}
+
+#[spec_test(REQ_VC_vm_cli_046)]
+#[test]
+fn step_when_started_after_a_stop_then_rounds_resume() {
+    let mut rig = Rig::over(compile_container(&counter_source(1)));
+    rig.ask(STOP);
+    rig.steps(2);
+    let rounds = rig.rounds();
+
+    let started = rig.ask(START);
+    rig.steps(2);
+
+    assert_eq!(
+        started,
+        serde_json::json!({"response": "runState", "runState": "running"})
+    );
+    assert!(rig.rounds() > rounds);
+    assert_eq!(run_state(&mut rig), "running");
+}
+
+/// A long stop is neither a burst of rounds nor a deadline that is owed: the
+/// first round after the start runs at once, and the period counts from it.
+#[spec_test(REQ_VC_vm_cli_048)]
+#[test]
+fn step_when_started_after_a_long_stop_then_one_round_at_once_and_the_period_counts_from_it() {
+    let mut rig = Rig::over(compile_container(&cyclic_source(1, "T#1ms")));
+    assert_eq!(rig.round_times(3), vec![0, 1_000, 2_000]);
+    rig.ask(STOP);
+    rig.clock.advance(10_000_000);
+    let rounds = rig.rounds();
+    let restarted_us = rig.clock.now_us();
+
+    rig.send(START);
+    let times = rig.round_times(3);
+
+    assert_eq!(
+        times,
+        vec![restarted_us, restarted_us + 1_000, restarted_us + 2_000]
+    );
+    assert_eq!(rig.rounds(), rounds + 3);
+}
+
+#[spec_test(REQ_VC_vm_cli_048)]
+#[test]
+fn step_when_started_after_a_short_stop_then_a_deadline_still_ahead_is_kept() {
+    let mut rig = Rig::over(compile_container(&cyclic_source(1, "T#1s")));
+    rig.steps(1);
+    let rounds = rig.rounds();
+    rig.ask(STOP);
+
+    rig.ask(START);
+
+    assert_eq!(rig.device_loop.core().host.next_due_us(), Some(1_000_000));
+    assert_eq!(rig.rounds(), rounds);
+}
+
+#[spec_test(REQ_VC_vm_cli_046)]
+#[test]
+fn step_when_start_or_stop_repeats_then_it_is_acknowledged_and_changes_nothing() {
+    let mut rig = Rig::over(compile_container(&counter_source(1)));
+    rig.steps(2);
+
+    let started = rig.ask(START);
+    let rounds_after_start = rig.rounds();
+    let stopped = rig.ask(STOP);
+    let stopped_again = rig.ask(STOP);
+    rig.steps(2);
+
+    assert_eq!(started["runState"], "running");
+    assert_eq!(rounds_after_start, 3);
+    assert_eq!(stopped["runState"], "stopped");
+    assert_eq!(stopped_again["runState"], "stopped");
+    assert_eq!(rig.rounds(), 3);
+}
+
+#[spec_test(REQ_VC_vm_cli_046)]
+#[test]
+fn step_when_stopped_or_started_then_the_edit_is_untouched() {
+    let mut rig = Rig::over(compile_container(&counter_source(1)));
+    rig.steps(1);
+    rig.ask(&accept_line(&counter_source(10)));
+    rig.ask(TEST);
+    let before = rig.ask(STATUS);
+
+    rig.ask(STOP);
+    rig.ask(START);
+    let after = rig.ask(STATUS);
+
+    assert_eq!(before["mode"], "testing");
+    assert_eq!(after["mode"], "testing");
+    assert_eq!(after["candidate"], before["candidate"]);
+    assert_eq!(after["active"], before["active"]);
+}
+
+/// A stop writes the retained values, as the stop of the process does; a stop
+/// of a stopped device writes nothing.
+#[spec_test(REQ_VC_vm_cli_047)]
+#[test]
+fn step_when_a_running_device_is_stopped_then_the_retained_file_is_written_once() {
+    let served = Served::new();
+    let (host, device, store) = served.boot();
+    let mut rig = Rig::with(host, device, Some(store), Shell::standalone());
+    rig.steps(2);
+    assert!(!served.retained().exists());
+
+    rig.ask(STOP);
+    assert!(served.retained().exists());
+    std::fs::remove_file(served.retained()).unwrap();
+    let again = rig.ask(STOP);
+
+    assert_eq!(again["runState"], "stopped");
+    assert!(!served.retained().exists());
+}
+
+#[spec_test(REQ_VC_vm_cli_047)]
+#[test]
+fn step_when_the_retained_file_cannot_be_written_at_a_stop_then_v6018_and_the_device_is_stopped() {
+    let served = Served::new();
+    let (host, device, store) = served.boot();
+    let mut rig = Rig::with(host, device, Some(store), Shell::standalone());
+    rig.steps(1);
+    std::fs::create_dir(served.retained_tmp()).unwrap();
+
+    let stopped = rig.ask(STOP);
+
+    assert_eq!(stopped["response"], "error");
+    assert_eq!(stopped["vCode"], "V6018");
+    assert_eq!(run_state(&mut rig), "stopped");
+}
+
+#[spec_test(REQ_VC_vm_cli_049)]
+#[test]
+fn step_when_device_is_faulted_then_start_is_refused_with_v6019_and_the_fault_stays() {
+    let mut rig = Rig::over(compile_container(TRAPPING_SOURCE));
+    rig.steps(2);
+
+    let started = rig.ask(START);
+    let identity = rig.ask(IDENTITY);
+
+    assert_eq!(started["response"], "error");
+    assert_eq!(started["vCode"], "V6019");
+    assert!(started["message"].as_str().unwrap().contains("V4001"));
+    assert_eq!(identity["fault"]["vCode"], "V4001");
+    assert_eq!(identity["runState"], "running");
+}
+
+#[spec_test(REQ_VC_vm_cli_049)]
+#[test]
+fn step_when_device_is_faulted_then_stop_is_accepted_and_the_fault_is_still_reported() {
+    let mut rig = Rig::over(compile_container(TRAPPING_SOURCE));
+    rig.steps(2);
+
+    let stopped = rig.ask(STOP);
+    let identity = rig.ask(IDENTITY);
+    let started = rig.ask(START);
+
+    assert_eq!(stopped["runState"], "stopped");
+    assert_eq!(identity["runState"], "stopped");
+    assert_eq!(identity["fault"]["vCode"], "V4001");
+    assert_eq!(started["vCode"], "V6019");
+}
+
+/// A swap request on a stopped device reaches its boundary without a round of
+/// logic, and the acknowledgment still means applied.
+#[spec_test(REQ_VC_vm_cli_050)]
+#[spec_test(REQ_VC_vm_cli_023)]
+#[test]
+fn step_when_stopped_then_a_swap_request_is_applied_at_once_without_a_round() {
+    let mut rig = Rig::over(compile_container(&counter_source(1)));
+    rig.steps(2);
+    rig.ask(STOP);
+    rig.ask(&accept_line(&counter_source(10)));
+    let rounds = rig.rounds();
+    let answer = rig.send(TEST);
+
+    rig.steps(1);
+    let status = rig.ask(STATUS);
+    let assembled = rig.ask(ASSEMBLE);
+
+    assert_eq!(parsed(&answer)["response"], "ack");
+    assert_eq!(status["mode"], "testing");
+    assert_eq!(assembled["response"], "ack");
+    assert_eq!(rig.rounds(), rounds);
+    assert_eq!(run_state(&mut rig), "stopped");
+}
+
+#[spec_test(REQ_VC_vm_cli_050)]
+#[test]
+fn step_when_stopped_swap_then_started_then_the_swapped_in_application_runs() {
+    let mut rig = Rig::over(compile_container(&counter_source(1)));
+    rig.steps(1);
+    rig.ask(STOP);
+    rig.ask(&accept_line(&counter_source(10)));
+    rig.ask(TEST);
+    let rounds = rig.rounds();
+
+    rig.ask(START);
+    rig.steps(2);
+
+    assert_eq!(rig.ask(STATUS)["mode"], "testing");
+    assert!(rig.rounds() > rounds);
 }

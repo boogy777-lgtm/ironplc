@@ -616,6 +616,16 @@ A call is one session: connect, `identity`, the command, and a `getStatus` after
 
 **REQ-TOL-mcp-175** Calls that follow one another on the same device each find it free: a call ends its session before it returns, so two tool calls back to back are never refused with V6014 by the device's own previous session.
 
+### Run and Stop: `device_start` and `device_stop`
+
+Run and Stop are a mechanism of their own beside Build ([ADR-0086](../adrs/0086-device-scan-loop.md), "Run and Stop (stage 3c)"): they change whether a device executes scan rounds and nothing else. The two tools are the device tools of the hot-edit family and take the same `device` parameter (REQ-TOL-mcp-174), here required, because the server's own session has no scan loop to start or stop.
+
+**REQ-TOL-mcp-176** `device_start` and `device_stop` connect to the device named by `device` and send `startScan` and `stopScan`. The response has the shape of the `hot_edit_*` tools: `ok`, `result: "ack"`, the `status` after the command and the `device` that answered, and one more field, `run_state` (`running` after a start, `stopped` after a stop), as the device reported it. A start of a running device and a stop of a stopped device are acknowledged and change nothing.
+
+**REQ-TOL-mcp-177** The tools compile nothing and do not touch the edit: a candidate that is staged, and a test that is in progress, are as they were after either tool.
+
+**REQ-TOL-mcp-178** A refusal of the device comes back as `v_code` and `message`, with no `run_state`: V6019 for a start of a faulted device (a stop of a faulted device is accepted), and V4022 from a host that has no scan loop.
+
 ## Architecture
 
 ### Transport

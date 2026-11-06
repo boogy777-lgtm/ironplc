@@ -14,3 +14,4 @@ V4018,ExecutionNotPermitted,Scan execution refused because the host holds no exe
 V4019,SnapshotCorrupt,Replicated state snapshot is internally inconsistent
 V4020,StableIdMissing,A persistent variable has no stable variable ID so a migration cannot carry its value
 V4021,DeviceSettingsUnavailable,The host has no device settings to change
+V4022,ScanControlUnavailable,The host has no scan to start or stop

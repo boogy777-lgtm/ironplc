@@ -5,7 +5,8 @@
 //! [`RetainedStore`]:
 //!
 //! - a controlled stop ([`Device::stopped`]): the device loop ends at the end of
-//!   its input or at Ctrl+C, on stdio and on TCP;
+//!   its input or at Ctrl+C, on stdio and on TCP, and the operator's `stopScan`
+//!   ([`Device::stop_scan`]) stops the scan of a running device;
 //! - `assembleEdits` ([`Device::assembled`]): the image of the application that
 //!   was just committed, tagged with its content hash;
 //! - a scan boundary, when the `retainedSavePeriod` setting is on
@@ -80,12 +81,13 @@ impl Device {
 
     /// Fills the facts of the device that the runtime layer cannot know into an
     /// `identity` answer: what it stores and what it did with it at boot, and
-    /// the fault of its scan. The one place they are put into the payload, for
+    /// the fault of its scan and whether it is commanded to run. The one place they are put into the payload, for
     /// every transport.
     pub(crate) fn complete_identity(&self, payload: &mut IdentityPayload) {
         payload.persisted_content_hash = self.kept.persisted_content_hash.clone();
         payload.retained = self.kept.retained_boot.map(BootResult::note);
         payload.fault = self.fault.clone();
+        payload.run_state = self.run_state;
     }
 
     /// Whether the application `host` runs is the one the device would boot.

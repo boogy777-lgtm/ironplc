@@ -29,6 +29,24 @@ pub fn earliest_due_us(task_states: &[TaskState]) -> Option<u64> {
         .min()
 }
 
+/// Restarts the deadlines of the cyclic tasks of `task_states` from `uptime_us`,
+/// for a driver that resumes a scan after a gap in which it ran no round.
+///
+/// A deadline that passed during the gap becomes due now, so that each such task
+/// runs once in the first round and its period counts from that round. Left
+/// alone, the stale deadline would make that first round count an overrun for
+/// the whole gap, though the task missed nothing: the driver did not ask for
+/// rounds. A deadline still ahead is kept, so a short gap does not shift the
+/// phase of a task. Counters are not touched.
+pub fn rearm_cyclic_deadlines(task_states: &mut [TaskState], uptime_us: u64) {
+    for task in task_states
+        .iter_mut()
+        .filter(|t| t.task_type == TaskType::Cyclic)
+    {
+        task.next_due_us = task.next_due_us.max(uptime_us);
+    }
+}
+
 /// Per-program-instance runtime state.
 #[derive(Clone, Debug, Default)]
 pub struct ProgramInstanceState {
@@ -327,6 +345,34 @@ mod tests {
         sched.record_execution(1, 100, 25_000);
         assert_eq!(sched.task_states[1].next_due_us, 35_000);
         assert_eq!(sched.task_states[1].overrun_count, 1);
+    }
+
+    #[test]
+    fn rearm_cyclic_deadlines_when_deadline_passed_then_due_now_and_no_overrun_is_counted() {
+        let table = two_cyclic_tasks_table();
+        let mut task_states = vec![TaskState::default(); table.tasks.len()];
+        populate_task_states(&table, &mut task_states);
+        let mut sched = TaskScheduler::new(&mut task_states);
+        sched.record_execution(1, 100, 0);
+
+        rearm_cyclic_deadlines(sched.task_states, 1_000_000);
+        sched.record_execution(1, 100, 1_000_000);
+
+        assert_eq!(sched.task_states[1].next_due_us, 1_010_000);
+        assert_eq!(sched.task_states[1].overrun_count, 0);
+    }
+
+    #[test]
+    fn rearm_cyclic_deadlines_when_deadline_still_ahead_then_kept() {
+        let table = two_cyclic_tasks_table();
+        let mut task_states = vec![TaskState::default(); table.tasks.len()];
+        populate_task_states(&table, &mut task_states);
+        let mut sched = TaskScheduler::new(&mut task_states);
+        sched.record_execution(1, 100, 0);
+
+        rearm_cyclic_deadlines(sched.task_states, 4_000);
+
+        assert_eq!(sched.task_states[1].next_due_us, 10_000);
     }
 
     #[test]

@@ -2,6 +2,7 @@
 
 status: accepted
 date: 2026-11-06
+amended: 2026-11-06 (added Run and Stop, stage 3c)
 
 ## Context and Problem Statement
 
@@ -201,6 +202,76 @@ until it moves onto the loop (stage 3d of the plan); Run and Stop commands and t
 - The existing `serve_tests.rs`, `serve_device_tests.rs` and
   `serve_retained_tests.rs` run unchanged on the scripted session of `Core`; the
   HA pair tests are not touched.
+
+## Run and Stop (stage 3c)
+
+Run and Stop are a mechanism of their own beside Build: they start and stop the
+scan, and no run path compiles. The device loop gains the one fact it needs, the
+run state, and two commands that change it.
+
+1. **Wire.** Two additive commands, `startScan` and `stopScan` (the style of
+   `getStatus` and `cancelEdits`: a verb and its object, since `start` and `stop`
+   alone say nothing next to `testEdits`). Each answers
+   `{"response":"runState","runState":"running"|"stopped"}`, the state after the
+   command: an acknowledgment that carries what it left. The `identity` answer
+   always carries `runState` next to `fault`; a reader that finds it absent reads
+   `running`, which is what a device that predates the field does. The protocol
+   version stays 2. The status does not carry it, as it does not carry the
+   fault: the run state is a fact of the device, and the status is the host's.
+2. **Where the state lives.** In `Device`, next to the fault, and not in the
+   host. Both are facts about whether a driver runs rounds, and only a driver can
+   honour them: the host executes a round when it is asked to, as the benchmark
+   and the MCP runner ask it. The runtime therefore owns the vocabulary (`RunState`,
+   the commands) and refuses the commands for a host without a scan loop (V4022,
+   the sibling of V4021 for settings); `ironplcvm serve` answers them itself
+   (`scan_control_line`). The loop asks one question before every round,
+   `Core::can_scan`: the host holds the permit, and the device is running and not
+   faulted (`Device::scans`).
+3. **Stop.** A command executes between rounds, so the round that was running
+   has finished when the stop takes effect, and the answer is written after it.
+   A stop of a running device writes the retained image through the path the
+   stop of the process uses (`Device::stopped`): the values do not change while
+   the device is stopped, and a power cut then loses nothing. A failed write
+   answers V6018 and the device is stopped all the same.
+4. **Start and the deadlines.** `RuntimeHost::run_paced_round` keeps the task
+   deadlines between rounds (decision 6), so after a stop the deadlines of the
+   cyclic tasks are in the past. Left alone, the first round would run each such
+   task once and count an overrun for the whole stop, though the task missed
+   nothing: the driver did not ask for rounds. The loop therefore restarts the
+   deadlines (`rearm_cyclic_deadlines`, next to `earliest_due_us`) at the moment
+   the scan resumes: a deadline that passed becomes due now, a deadline still
+   ahead is kept. It does so when the device may scan after an iteration in
+   which it could not, so a returned execution permit is a resume too. The result
+   is one round at once, no burst, no overrun, and a period that counts from
+   that round.
+5. **Idempotence.** A start of a running device and a stop of a stopped device
+   are acknowledged and change nothing, and a stop of a stopped device writes
+   nothing.
+6. **A faulted device.** A stop is accepted: the device is stopped and its fault
+   stays reported, because the run state and the fault are reported apart. A
+   start is refused with V6019 and changes nothing, because a start does not
+   clear a fault and an acknowledged start of a device that cannot scan would
+   lie; the device is restarted. A command that clears a fault (reset) is a later
+   class: one command variant and its row in the device loop, with no new member
+   of `RunState`.
+7. **Hot edits while stopped.** A request of a swap is applied at its boundary
+   without a round of logic, through the path the loop already uses for a
+   faulted device (`apply_pending_at_boundary`), so the acknowledgment still
+   means applied. `Core::round` has one test for both: the device does not scan.
+8. **The pair path.** The HA pair path does not run on the loop yet (stage 3d)
+   and does not scan between commands, so it has no scan to start or stop and
+   answers both commands with V4022 rather than report a state it cannot keep.
+9. **MCP.** `device_start` and `device_stop` take the `device` parameter of the
+   other device tools (required: the in-process host has no scan loop) and send
+   the command through the session client. They compile nothing.
+
+Confirmation: `compiler/vm-cli/src/device_loop/tests.rs` drives the loop on the
+fake clock (a stop runs no round and commands are answered, a start resumes
+without a burst after a long stop and keeps a deadline that is still ahead, both
+are idempotent, a stop writes the retained file, a start of a faulted device is
+refused, a swap on a stopped device is applied without a round);
+`compiler/vm/src/scheduler.rs` tests the deadline restart; `serve_device.rs`
+runs the commands against a real process.
 
 ## More Information
 

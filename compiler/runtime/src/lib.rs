@@ -32,7 +32,7 @@ mod problem_codes {
 pub use commands::{
     execute, parse_command, parse_response, render_command, render_response, BootNote, Command,
     CommandError, DeviceIdentity, EditSpec, FaultNote, IdentityPayload, MigrationDecisionSpec,
-    RedundancyIdentity, Response, StatusPayload, TypeChangeDetail, DEFAULT_SESSION_PORT,
+    RedundancyIdentity, Response, RunState, StatusPayload, TypeChangeDetail, DEFAULT_SESSION_PORT,
     SESSION_PROTOCOL_VERSION,
 };
 pub use error::{OnlineChangeError, RuntimeError};

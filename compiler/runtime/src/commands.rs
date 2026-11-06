@@ -60,6 +60,19 @@ pub enum Command {
     AssembleEdits,
     /// Discards the staged candidate.
     CancelEdits,
+    /// Starts the scan: the device executes scan rounds again. Changes whether
+    /// rounds run and nothing else: it compiles nothing and does not touch the
+    /// edit. Answered by [`Response::RunState`] with `running`; idempotent.
+    ///
+    /// Like [`Command::SetDeviceSettings`], the runtime owns no scan loop, so
+    /// the application that drives the rounds answers this command itself, and
+    /// [`execute`] refuses it for a host that has none (V4022).
+    StartScan,
+    /// Stops the scan: the device finishes the round it is in, executes no
+    /// further round and goes on answering every command. Answered by
+    /// [`Response::RunState`] with `stopped`; idempotent. Same ownership as
+    /// [`Command::StartScan`].
+    StopScan,
     /// Changes the device's own settings (`deviceId`, `name`, ...): the
     /// fields of the command are the settings to change, named as the
     /// device's settings file names them, and a setting that is not named
@@ -342,6 +355,30 @@ pub struct IdentityPayload {
     /// a client ignores what it does not know.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fault: Option<FaultNote>,
+    /// Whether the device executes scan rounds, see [`RunState`]. A fault is
+    /// not a stop: a faulted device reports the state it was commanded to
+    /// alongside its `fault`. A device that predates the field scans, so a
+    /// reader that finds it absent reads `running`.
+    #[serde(default)]
+    pub run_state: RunState,
+}
+
+/// Whether a device executes scan rounds. Apart from the edit stage (a device
+/// runs or stops with an edit in any stage) and apart from a fault, which stops
+/// the scan by itself and is reported in its own field. A stopped device
+/// answers every command.
+///
+/// The state belongs to the application that drives the rounds, as the fault
+/// does: the host executes a round when it is asked to, and only a driver can
+/// honour a stop.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RunState {
+    /// The device executes its scan rounds. The state a device boots in.
+    #[default]
+    Running,
+    /// The device executes no round until it is started.
+    Stopped,
 }
 
 /// The trap that stopped the scan of a device: the stable V-code of the trap,
@@ -398,6 +435,13 @@ pub enum Response {
     Status(StatusPayload),
     /// The command succeeded; there is nothing further to report.
     Ack,
+    /// The answer to [`Command::StartScan`] and [`Command::StopScan`]: an
+    /// acknowledgment that carries the run state the device is in now.
+    RunState {
+        /// The state after the command.
+        #[serde(rename = "runState")]
+        run_state: RunState,
+    },
     /// The command failed; carries a stable V-code and the host's message.
     Error(CommandError),
 }
@@ -444,6 +488,16 @@ impl CommandError {
         CommandError {
             v_code: problem_codes::DEVICE_SETTINGS_UNAVAILABLE.to_string(),
             message: "this host has no device settings to change".to_string(),
+            pairs: None,
+        }
+    }
+
+    /// Builds the refusal of a [`Command::StartScan`] or [`Command::StopScan`]
+    /// by a host that has no scan loop to start or stop.
+    fn scan_control_unavailable() -> Self {
+        CommandError {
+            v_code: problem_codes::SCAN_CONTROL_UNAVAILABLE.to_string(),
+            message: "this host has no scan to start or stop".to_string(),
             pairs: None,
         }
     }
@@ -542,6 +596,7 @@ pub fn execute(command: Command, host: &mut RuntimeHost, device: &DeviceIdentity
             persisted_content_hash: None,
             retained: None,
             fault: None,
+            run_state: RunState::default(),
         })),
         Command::GetStatus => Response::Status(StatusPayload::from(host.status())),
         Command::AcceptEdits {
@@ -555,6 +610,9 @@ pub fn execute(command: Command, host: &mut RuntimeHost, device: &DeviceIdentity
         Command::CancelEdits => ack_or_error(host.cancel()),
         Command::SetDeviceSettings { .. } => {
             Response::Error(CommandError::device_settings_unavailable())
+        }
+        Command::StartScan | Command::StopScan => {
+            Response::Error(CommandError::scan_control_unavailable())
         }
     }
 }

@@ -45,8 +45,8 @@ use ironplc_dsl::core::SourceSpan;
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
 use ironplc_problems::{text, Text};
 use ironplc_runtime::{
-    execute, Command, CommandError, DeviceIdentity, MigrationDecisionSpec, Response, RuntimeError,
-    RuntimeHost, StatusPayload, TypeChangeDetail,
+    execute, Command, CommandError, DeviceIdentity, MigrationDecisionSpec, Response, RunState,
+    RuntimeError, RuntimeHost, StatusPayload, TypeChangeDetail,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -99,6 +99,14 @@ pub struct HotEditDeviceInput {
     pub device: Option<DeviceInput>,
 }
 
+/// Input of `device_start` and `device_stop`: the device whose scan to start or
+/// stop. Required: the server's own session has no scan loop to start or stop.
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct DeviceScanInput {
+    /// The device to act on (see [`DeviceInput`]).
+    pub device: DeviceInput,
+}
+
 /// schemars schema function for the UID-keyed `migration` map.
 ///
 /// [`MigrationDecisionSpec`] comes from the runtime crate and does not
@@ -143,6 +151,10 @@ pub struct HotEditResponse {
     /// another one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub device: Option<DeviceIdentity>,
+    /// The run state of the device after `device_start` or `device_stop`:
+    /// `running` or `stopped`. Absent for every other tool.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run_state: Option<RunState>,
     /// Compiler diagnostics: compile failures on `hot_edit_accept`, and
     /// validation failures (such as calling a tool before any session
     /// exists) with code P8001.
@@ -160,6 +172,7 @@ impl HotEditResponse {
             message: None,
             pairs: None,
             device: None,
+            run_state: None,
             diagnostics: vec![],
         }
     }
@@ -174,6 +187,7 @@ impl HotEditResponse {
             message: None,
             pairs: None,
             device: None,
+            run_state: None,
             diagnostics,
         }
     }
@@ -190,6 +204,7 @@ impl HotEditResponse {
             message: Some(message),
             pairs: None,
             device: None,
+            run_state: None,
             diagnostics: vec![],
         }
     }
@@ -207,6 +222,7 @@ impl HotEditResponse {
             message: Some(error.message().to_string()),
             pairs: error.pairs().map(<[TypeChangeDetail]>::to_vec),
             device: None,
+            run_state: None,
             diagnostics: vec![],
         }
     }
@@ -228,6 +244,7 @@ impl HotEditResponse {
                 )),
                 pairs: None,
                 device: None,
+                run_state: None,
                 diagnostics: vec![],
             },
             RuntimeError::Internal { reason } => {
@@ -246,6 +263,7 @@ impl HotEditResponse {
                     message: Some(error.to_string()),
                     pairs: None,
                     device: None,
+                    run_state: None,
                     diagnostics: vec![],
                 }
             }
@@ -274,6 +292,7 @@ fn internal_failure(message: String) -> HotEditResponse {
         message: None,
         pairs: None,
         device: None,
+        run_state: None,
         diagnostics: vec![serialize_diagnostic(
             &Diagnostic::internal_error_at(Label::span(SourceSpan::default(), message)),
             &[],
@@ -343,6 +362,11 @@ fn dispatch(command: Command, session: &mut HotEditSession, drive_scan: bool) ->
         // device panel to answer with.
         Response::Identity(_) => {
             internal_failure("identity is not available on the MCP hot edit session".to_string())
+        }
+        // The in-process host has no scan loop: it refuses the scan control (V4022)
+        // and never answers a run state.
+        Response::RunState { .. } => {
+            internal_failure("the MCP hot edit session has no run state".to_string())
         }
     }
 }
@@ -545,6 +569,21 @@ pub fn build_untest_response<'a>(target: impl Into<Target<'a>>) -> HotEditRespon
 /// staged and the testing phase.
 pub fn build_assemble_response<'a>(target: impl Into<Target<'a>>) -> HotEditResponse {
     run(Command::AssembleEdits, target.into(), true)
+}
+
+/// Builds the `device_start` response: the device executes scan rounds again.
+/// The command changes whether rounds run and nothing else: nothing is compiled
+/// and the edit is not touched. The response carries the `run_state` the device
+/// reports.
+pub fn build_start_response<'a>(target: impl Into<Target<'a>>) -> HotEditResponse {
+    run(Command::StartScan, target.into(), false)
+}
+
+/// Builds the `device_stop` response: the device finishes the round it is in,
+/// executes no further round and goes on answering commands. Same contract as
+/// [`build_start_response`].
+pub fn build_stop_response<'a>(target: impl Into<Target<'a>>) -> HotEditResponse {
+    run(Command::StopScan, target.into(), false)
 }
 
 /// Builds the `hot_edit_cancel` response: discards the staged candidate while

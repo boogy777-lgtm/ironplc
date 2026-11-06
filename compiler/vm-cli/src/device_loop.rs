@@ -31,6 +31,14 @@
 //! round, keeps answering every command, and reports the fault in `identity`
 //! (see [`crate::device_settings::device::Device::note_fault`]).
 //!
+//! The operator can stop the scan too (`stopScan`): the run state is the
+//! device's, apart from the fault. A stopped device runs no round, answers every
+//! command, and applies a requested swap at the boundary without executing the
+//! logic, as a faulted device does. When the scan resumes after any gap (a
+//! start, a permit that returns), the loop restarts the deadlines of the cyclic
+//! tasks from that moment ([`ironplc_runtime::RuntimeHost::rearm_cyclic_tasks`])
+//! so the gap is neither a burst of rounds nor a counted overrun.
+//!
 //! [`Core`] is the part of the loop that has no clock and no channel: execute a
 //! line, run a boundary round at a given uptime, finish a command. The
 //! scripted session of the tests ([`scripted`]) drives it directly, so the
@@ -163,9 +171,10 @@ pub(crate) struct Core<'a> {
 
 impl Core<'_> {
     /// Whether the device may run a scheduled round: it holds the execution
-    /// permit and its scan has not trapped.
+    /// permit, its scan has not trapped and it is not stopped. The one place
+    /// that decides it.
     pub(crate) fn can_scan(&self) -> bool {
-        self.host.execution_permitted() && self.device.fault().is_none()
+        self.host.execution_permitted() && self.device.scans()
     }
 
     /// Executes one command line. The simulated pair ticks first: the command
@@ -187,13 +196,14 @@ impl Core<'_> {
     }
 
     /// Runs one scan boundary at `uptime_us`: one round, then the periodic write
-    /// of the retained values. A device that is faulted scans no more; a swap
-    /// that was requested still reaches its boundary, so an acknowledgment
-    /// still means applied. A trap faults the device.
+    /// of the retained values. A device that is faulted or stopped scans no
+    /// more; a swap that was requested still reaches its boundary without
+    /// executing the logic, so an acknowledgment still means applied. A trap
+    /// faults the device.
     pub(crate) fn round(&mut self, uptime_us: u64) {
-        if self.device.fault().is_some() {
+        if !self.device.scans() {
             if let Err(err) = self.host.apply_pending_at_boundary() {
-                log::error!("the swap of a faulted device was not applied: {err}");
+                log::error!("the swap of a device that does not scan was not applied: {err}");
             }
             return;
         }
@@ -248,6 +258,8 @@ pub(crate) struct DeviceLoop<C: Clock = SystemClock> {
     parked: Vec<(Executing, Sender<Answer>)>,
     /// Every sender is gone.
     closed: bool,
+    /// Whether the previous iteration could scan; a change to `true` is a resume.
+    scanning: bool,
 }
 
 impl<C: Clock> DeviceLoop<C> {
@@ -274,6 +286,7 @@ impl<C: Clock> DeviceLoop<C> {
             arrived: None,
             parked: Vec::new(),
             closed: false,
+            scanning: false,
         }
     }
 
@@ -304,7 +317,14 @@ impl<C: Clock> DeviceLoop<C> {
 
         let now_us = self.pacer.uptime_us();
         let mut core = self.owned.core();
-        let due = core.can_scan() && is_due(now_us, core.host.next_due_us());
+        let may_scan = core.can_scan();
+        if may_scan && !self.scanning {
+            // The first iteration, a start, a returned permit: no round ran
+            // for a while, so no deadline of a cyclic task is owed.
+            core.host.rearm_cyclic_tasks(now_us);
+        }
+        self.scanning = may_scan;
+        let due = may_scan && is_due(now_us, core.host.next_due_us());
         if due || !self.parked.is_empty() {
             core.round(now_us);
         }

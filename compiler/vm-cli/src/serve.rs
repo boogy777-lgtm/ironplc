@@ -320,6 +320,14 @@ pub(crate) fn execute_line(
         Ok(Command::SetDeviceSettings { settings }) => {
             set_device_settings_line(device, &settings).map(Executed::Answer)
         }
+        // The scan control is answered here, by the application that drives the
+        // rounds; the pair path does not scan by itself yet, so there the
+        // runtime refuses it (V4022) rather than report a state it cannot keep.
+        Ok(command @ (Command::StartScan | Command::StopScan))
+            if !matches!(ha.as_deref(), Some(Ha::Pair(_))) =>
+        {
+            scan_control_line(host, device, &command).map(Executed::Answer)
+        }
         Ok(command) => {
             let commits = matches!(command, Command::AssembleEdits);
             let advances = advances_state(&command);
@@ -411,7 +419,7 @@ pub(crate) fn finish_line(
         if let Some(store) = store {
             if let Err(err) = commit_assembled(host, store, device) {
                 log::error!("assemble persistence failed: {err}");
-                rendered = Some(persist_error_line(&err));
+                rendered = Some(coded_error_line(&err));
             }
         }
     }
@@ -617,18 +625,45 @@ pub(crate) fn commit_assembled(
     device.assembled(host)
 }
 
-/// Renders the answer that replaces the assemble acknowledgment when the
-/// commit could not be persisted (ADR-0064 amendment): V6012 for the slot
-/// store, V6018 for the retained file. Built directly: these are shell codes,
-/// not the runtime command layer's V40xx codes, so the typed `Response`
-/// cannot carry them.
-fn persist_error_line(err: &VmError) -> String {
+/// Renders the answer that carries a shell code in place of the
+/// acknowledgment: V6012 for the slot store and V6018 for the retained file
+/// when the commit could not be persisted (ADR-0064 amendment), V6019 for a
+/// start of a faulted device. Built directly: these are shell codes, not the
+/// runtime command layer's V40xx codes, so the typed `Response` cannot carry
+/// them.
+fn coded_error_line(err: &VmError) -> String {
     serde_json::json!({
         "response": "error",
         "vCode": err.v_code(),
         "message": err.to_string(),
     })
     .to_string()
+}
+
+/// Answers `startScan` and `stopScan` (the scan control, REQ-VC-vm-cli-046):
+/// the run state the device is in now, or the coded refusal (V6019 for a start
+/// of a faulted device, V6018 when the retained values of a stop cannot be
+/// written, with the device stopped all the same). Neither compiles anything or
+/// touches the edit: the commands only change whether rounds run.
+fn scan_control_line(
+    host: &RuntimeHost,
+    device: &mut Device,
+    command: &Command,
+) -> io::Result<String> {
+    let changed = match command {
+        Command::StartScan => device.start_scan(),
+        _ => device.stop_scan(host),
+    };
+    match changed {
+        Ok(run_state) => {
+            log::info!("the scan is {run_state:?}");
+            render_line(&Response::RunState { run_state })
+        }
+        Err(err) => {
+            log::warn!("the run state is not as commanded: {err}");
+            Ok(coded_error_line(&err))
+        }
+    }
 }
 
 /// Answers `setDeviceSettings`: the acknowledgment once the change is
