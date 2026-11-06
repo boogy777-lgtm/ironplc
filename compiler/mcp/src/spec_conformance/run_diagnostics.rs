@@ -67,6 +67,10 @@ fn classified() -> Vec<(&'static str, Framing)> {
             Framing::Other("frames its diagnostics with the lines of a build (REQ-DS-mcp-011)"),
         ),
         (
+            "online_compare",
+            Framing::Other("returns the messages of the build of its sources, framed as compile frames them (REQ-DS-mcp-011)"),
+        ),
+        (
             "parse",
             Framing::Other("the syntax stage alone: there is no run to close"),
         ),

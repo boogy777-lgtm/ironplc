@@ -199,6 +199,84 @@ Path Record Commands
    record exists. The editor asks for the path instead of deriving it, so the
    rule that names the file is only in the compiler.
 
+Go-Online Comparison Command
+----------------------------
+
+:program:`ironplcc online-compare` [*FILES*...] ``-o`` *OUTPUT* ``--identity`` *FILE*
+   Compare the controller that you went online to with the project and print the
+   comparison as one JSON object on standard output. The editor runs this
+   command and renders the answer, so the editor and the MCP server give the same
+   answer for the same controller and project. The command never changes a
+   file and never builds: it reads the sources the way :program:`ironplcc compile`
+   does, compares them with the build record beside *OUTPUT*, and only when they
+   differ analyzes them to find out whether they build.
+
+   The controller is described by its answer to ``identity``, which the editor
+   received from the session; give it as JSON in *FILE*, or ``-`` for standard
+   input. The records are the ones beside *OUTPUT*, the application container
+   (:file:`{STEM}.iplc`): the build record, the download record of the controller
+   (found by the device ID in the identity) and the path record. A record that is
+   missing or damaged is no record.
+
+   The content hash is the only comparison: the generation counters of a
+   controller restart when it boots and are not read. Going online never
+   refuses because the controller is a different one; that is an information
+   row. The object has these fields:
+
+   ``row``, ``rowNumber``
+      The headline. ``unreachable`` (1), ``busy`` (2), ``protected`` (3),
+      ``noApplication`` (4), ``upToDate`` (5), ``sourcesChanged`` (6),
+      ``previousDownload`` (7), ``previousDownloadOtherLayout`` (8),
+      ``otherApplication`` (9) or ``connectionLost`` (13).
+      ``previousDownload`` and ``previousDownloadOtherLayout`` mean that the
+      controller holds what the last download put there and not the last build.
+
+   ``summary``
+      One line for the status bar.
+
+   ``connected``, ``atOnce``
+      Whether a session is open, and whether the editor goes online with no
+      dialog, which it does only when the application is up to date.
+
+   ``controller``
+      What the controller is: ``deviceId``, ``runtimeVersion``, ``runState``,
+      ``editStage`` and what it ``holds`` (``noApplication``, ``application``
+      with its ``contentHash`` and ``layoutHash``, or ``unknown`` for a
+      controller that does not report them). ``null`` when the attempt did not
+      reach the controller.
+
+   ``project``
+      What the project has: its ``status`` (``upToDate``, ``changedSinceBuild``,
+      ``neverBuilt`` or ``buildFails``) and the ``application``,
+      ``contentHash`` and ``layoutHash`` of the last build.
+
+   ``lastDownload``
+      The download record of the controller (``contentHash``, ``layoutHash`` and
+      ``time``), or ``null``.
+
+   ``information``
+      Conditions beside the headline, each with a ``kind`` and a ``text``:
+      ``otherController`` (not the controller last chosen), ``noDeviceId``,
+      ``contentNotReported``, ``editInProgress``, ``buildFails``,
+      ``containerFormatRefused``, ``stopped``, ``faulted``, ``notPersisted``,
+      ``candidateLost`` and ``retainedDiscarded``.
+
+   ``actions``
+      Every action, in a fixed order, each with its ``enabled`` state and, when it
+      is not enabled, the ``reason`` (``code`` and ``text``): ``monitor``,
+      ``onlineChange``, ``download``, ``upload``, ``search``, ``chooseAnother``,
+      ``retry`` and ``resolve``. ``monitor`` is enabled whenever the controller was
+      reached. ``upload`` is never enabled yet.
+
+   ``hotEdit``
+      ``allowed`` and ``reason``: whether the Build of an online change may begin.
+      It is the answer of the ``onlineChange`` action.
+
+   The command succeeds for every state of the controller and the project. It
+   fails, with a message, when the identity cannot be read, when a record cannot
+   be read from the file system, and when ``--attempt ok`` is given without
+   ``--identity``.
+
 Other Commands
 --------------
 
@@ -271,6 +349,16 @@ Options
    that was executing, of the normal (committed) artifact, and of the
    application. Applies to ``record-download``. Give all three or none. A
    device restarts them when it reboots, so they describe one session.
+
+``--attempt`` *OUTCOME*
+   How the attempt to connect went: ``ok`` (default), ``unreachable``, ``busy``,
+   ``protected`` or ``connection-lost``. Applies to ``online-compare``. With
+   ``ok`` the identity of the controller is read from ``--identity``.
+
+``--identity`` *FILE*
+   The answer of the controller to ``identity`` as JSON, from *FILE* or from
+   standard input when *FILE* is ``-``. Applies to ``online-compare``. Required
+   with ``--attempt ok`` and refused with any other attempt.
 
 ``--format`` *FORMAT*
    Select how :program:`ironplcc check` writes its messages. ``text`` (default)

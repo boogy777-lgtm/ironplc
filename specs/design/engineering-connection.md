@@ -247,8 +247,8 @@ Field set:
   in the header of the normal (committed) artifact as 64 lowercase
   hexadecimal digits (REQ-VC-vm-cli-024). They are optional on the wire:
   a device that predates them omits them, and a client that does not know
-  them ignores them, so adding them keeps the protocol version. The client
-  compares `contentHash` with its download record (below).
+  them ignores them, so adding them keeps the protocol version. The comparison
+  reads `contentHash` against the project's records (below).
   A third optional field, `edit`, is the edit view (ADR-0087): which edit
   commands the host allows now, and why not for the others. It has `stage`
   (`idle`, `accepted`, `testing`, `testingMigration`, `testingReplace`, or
@@ -635,54 +635,57 @@ HA Engineering UI Contract already defers push channels the same way, and
 ADR-0055 records the 3.3x JSON-bytes size note that would motivate
 chunking.
 
-### Offline edits, online deploy (baseline check)
+### Going online: the comparison
 
-The owner scenario: the engineer connects, verifies the project equals the
-controller's code, disconnects, edits offline, builds offline, and
-reconnects to deploy. The deploy is the online build above; the only
-addition is a pre-send baseline check.
+The owner scenario: the engineer connects, sees what the controller holds against
+the project, disconnects, edits offline, builds offline, and reconnects to deploy.
+What follows a connect is decided once, by the comparison of
+[ADR-0089](../adrs/0089-go-online-comparison.md), and not by each client:
+`ironplc_project::online_comparison::compare` (`compiler/project/src/online_comparison.rs`)
+is a pure function from the answer to the attempt, the records and the state of the
+project to a `Comparison`. The editor runs `ironplcc online-compare` and renders the
+JSON it prints; the MCP tool `online_compare` returns the same object.
 
-1. **Baseline: the download record, comparison on (re)connect.** The
-   baseline is the *download record* of the device
-   ([ADR-0083](../adrs/0083-build-and-download-records.md)): a file beside
-   the application, `<app>.<deviceId>.download.iplcinfo` (the `deviceId` the
-   device reports in its `identity`), written by
-   `ironplcc record-download` after every download the engineer's tools
-   make (an acknowledged assemble, or a session started with a container).
-   It holds the identity of the container the device received (the
-   `contentHash` and `layoutHash` of its header). On every (re)connect,
-   before any bytes are sent, the client compares the `contentHash` that
-   `identity` reports (above) with the record. The hash is the authority,
-   not the generation counters: session generations restart on a device
-   reboot, while the container hash is recomputed and verified at every
-   load — `verify_load` (`compiler/container/src/load_verify.rs`) and
-   the content-hash check `check_content_hash`
-   (`compiler/container/src/integrity.rs`) —
-   so a hash comparison means the same thing before and after a reboot.
-2. **Match → the normal online change.** The record and the device agree:
-   the build proceeds as above — `acceptEdits` (answering V4010 with the
-   ADR-0061 migration decisions), `testEdits` (mandatory per ADR-0064),
-   observe, `assembleEdits`. When the candidate is a migration candidate,
-   the panel surfaces early that untest is unavailable (V4011) — cancel is
-   possible only before Test, and once it executes assemble is the only exit
-   (cancel is refused with V4011 as well).
-3. **Mismatch → coded refusal.** Another engineer edited the device, or the
-   hash simply differs: the record is stale and the client refuses with a
-   new E-code in the existing registry
-   (`integrations/vscode-common/resources/problem-codes.csv`, E0015
-   StaleBaseline). A device that reports no `contentHash` (it predates the
-   field) cannot be compared; with a record present that is a mismatch too,
-   and the remedy is the same: re-sync the project from the device and
-   rebuild. There is no silent deploy over unknown state — fail-closed, the
-   same pattern as the V4007–V4010 staging refusals.
-4. **No record → initial deploy.** No record exists and none is needed
-   (an empty device, or a connection that was never downloaded to): the
-   same accept → test → assemble sequence runs, the test at the barrier
-   trivial for empty state (ADR-0064), and the acknowledged assemble writes
-   the first record.
-
-Offline edits change only the pre-send check; the deploy itself is always
-the same online-change flow.
+1. **What is compared.** The `contentHash` that `identity` reports (above) against
+   the `contentHash` of the last build (P, from the build record), of the last
+   download to this device (R, the download record found by the `deviceId` the
+   device reports) and of the empty application. The hash is the authority and the
+   only comparison, not the generation counters: session generations restart on a
+   device reboot, while the container hash is recomputed and verified at every
+   load (`verify_load` in `compiler/container/src/load_verify.rs`, and
+   `check_content_hash` in `compiler/container/src/integrity.rs`), so a hash
+   comparison means the same thing before and after a reboot. The `layoutHash`
+   only tells a previous download with the project's layout from one without.
+2. **The state of the project** is the up-to-date check of the build record
+   ([ADR-0083](../adrs/0083-build-and-download-records.md)) run as a query, which
+   reads the sources and does not build: `upToDate`, `changedSinceBuild`,
+   `buildFails` (the sources do not analyze) or `neverBuilt` (no usable record).
+3. **The headline** is one row: `unreachable`, `busy` (V6014), `protected`,
+   `connectionLost`, or, for a controller that answered, `noApplication` (it
+   holds the empty application), `upToDate` (C = P and the sources are those of
+   the build: the editor goes online with no dialog), `sourcesChanged` (C = P),
+   `previousDownload` and `previousDownloadOtherLayout` (C = R and C is not P),
+   or `otherApplication`.
+4. **Connect never refuses.** The comparison does not refuse a controller for
+   being a different one, for holding another application, or for holding none.
+   Monitor is enabled whenever the controller answered. A controller that is not
+   the one last chosen (the path record, below) is an information row.
+5. **Information rows** stand beside the headline: an edit unfinished on the
+   controller, a project that does not build, the other controller, a container
+   format the controller refuses, a controller that is stopped or faulted, running
+   code that is not persisted, a candidate that a restart lost, retained values
+   that were discarded at boot, a device that reports no id or no hash.
+6. **Actions.** `monitor`, `onlineChange`, `download`, `upload`, `search`,
+   `chooseAnother`, `retry` and `resolve`, each with its enablement and, when not
+   enabled, a reason. The Build of an online change (`hotEdit.allowed`) is
+   enabled only where the controller holds the last build or the last download
+   and accepts an edit; where it holds no application or one this workstation did
+   not send, Download is the way in, and it writes the download record.
+7. **The deploy** after a comparison that allows it is the online change flow
+   above: `acceptEdits` (answering V4010 with the ADR-0061 migration decisions),
+   `testEdits` (mandatory per ADR-0064), observe, `assembleEdits`. A full
+   initial deploy onto an empty device is a Download, the `replace` mode of the
+   same sequence ([ADR-0088](../adrs/0088-download-is-the-replace-mode.md)).
 
 ### The path record (the controller last chosen)
 
@@ -775,7 +778,8 @@ Everything reused, with its one authority:
 | Heartbeat | `getStatus` — `Command::GetStatus` in `compiler/runtime/src/commands.rs` |
 | Redundancy block vocabulary | [HA Redundancy FSM](ha-redundancy-fsm.md) (epoch, SYNC/CONTROL) |
 | Baseline identity (artifact hash, UID sidecar) | `verify_load` in `compiler/container/src/load_verify.rs`; `compiler/project/src/sidecar.rs` |
-| Download record (the baseline) | `compiler/project/src/download_record.rs`; `ironplcc record-download` |
+| Download record | `compiler/project/src/download_record.rs`; `ironplcc record-download` |
+| The go-online comparison | `compiler/project/src/online_comparison.rs` (`compare`); `ironplcc online-compare` (`compiler/ironplc-cli/src/cli/online_compare.rs`); the MCP tool `online_compare` (`compiler/mcp/src/tools/online_compare.rs`) |
 | Path record (the controller last chosen) | `compiler/project/src/path_record.rs`; `ironplcc record-path`, `record-path-path` |
 | Choosing a controller (the editor side) | `chooseController` in `integrations/vscode/src/chooseController.ts`; the picker and its decisions in `chooseControllerLogic.ts`; the command id in `HANDOFF_ACTIONS` of `integrations/vscode-common` |
 | The IronLink API the editor reads | `IronLinkApi` in `integrations/vscode-common/src/ironlinkApi.ts`; `accessIronLink` in `integrations/vscode/src/ironlinkAccess.ts` |

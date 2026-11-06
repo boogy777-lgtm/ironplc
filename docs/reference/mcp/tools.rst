@@ -423,6 +423,56 @@ nothing. A faulted device accepts a stop and refuses a start with
 :doc:`V6019 </reference/runtime/problems/V6019>`, because a start does not clear a
 fault; restart the device. See :ref:`ironplcvm-run-stop` for what the device does.
 
+Go-Online Comparison Tool
+=========================
+
+:literal:`online_compare` compares a controller with the project, as the editor
+does when it goes online: what the controller is, what it holds, what the project
+has, and which actions follow. It never refuses because the controller is another
+one than the one you meant; that is an information row. The content hash of the
+application is the only comparison: the generation counters of a controller
+restart when it boots and are not read. The answer is the one that
+:program:`ironplcc online-compare` prints (see :doc:`/reference/compiler/ironplcc`),
+so the editor, the command line and this tool agree.
+
+**Inputs:**
+
+* ``device`` (object, required) --- The controller, named as for the
+  :literal:`hot_edit_*` tools: ``address`` and optionally ``port``, or
+  ``device_id``.
+* ``sources`` (array, optional) and ``options`` (object, required with
+  ``sources``) --- The project. The server compiles the sources, and the
+  container that comes out is the last build of the project. Without
+  ``sources`` the controller is compared with no project.
+
+The server reads no file of the project, so it has no download record and no path
+record. A controller that holds anything but the compiled sources is
+``otherApplication``, and the rows ``previousDownload``,
+``previousDownloadOtherLayout`` and the information row ``otherController`` do not
+occur.
+
+**Returns:** an object with ``ok``, ``comparison`` and ``diagnostics``.
+``comparison`` has the headline ``row`` and ``rowNumber``, a ``summary``,
+``connected``, ``controller``, ``project``, the ``information`` rows (each with a
+``kind`` and a ``text``), ``actions`` and ``hotEdit``. Every action
+(``monitor``, ``onlineChange``, ``download``, ``upload``, ``search``,
+``chooseAnother``, ``retry`` and ``resolve``) is listed with ``enabled`` and, when
+it is not enabled, a ``reason`` with a ``code`` and a ``text``. ``hotEdit.allowed``
+says whether :literal:`hot_edit_accept` in ``change`` mode may begin; for a
+controller that holds no application, or an application that is not the compiled
+sources, only the ``download`` action (:literal:`hot_edit_accept` in ``replace``
+mode) changes it. ``diagnostics`` holds
+the messages of building the ``sources``, framed as for :literal:`compile`; when
+they do not build, the ``project`` has the status ``buildFails``.
+
+A controller that cannot be reached, or that serves another session
+(:doc:`V6014 </reference/runtime/problems/V6014>`), is a comparison with the row
+``unreachable`` or ``busy`` and ``ok`` true. A refusal of the device with another
+code comes back as ``v_code`` and ``message`` and no ``comparison``, an invalid
+``device`` as a :doc:`P8001 </reference/compiler/problems/P8001>` diagnostic and a
+session that fails as a :doc:`P8003 </reference/compiler/problems/P8003>`
+diagnostic. The call ends its session before it returns.
+
 Network Tools
 =============
 

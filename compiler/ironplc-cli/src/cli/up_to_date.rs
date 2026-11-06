@@ -6,7 +6,7 @@
 //! `ironplc_project::build_record`; this module only decides what the command
 //! does with it and says what it found.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_problems::codeless;
@@ -25,6 +25,42 @@ pub(super) struct Previous {
     pub diagnostics: Vec<Diagnostic>,
 }
 
+/// What the build record says about the build that would write `output`, found
+/// without building: the one question both the `compile` command (may it skip?)
+/// and the go-online comparison (is the project as it was built?) ask.
+pub(super) enum Query {
+    /// There is no record, or `output` has no name to derive one from.
+    Missing,
+    /// The file is not a build record of this version.
+    Malformed(PathBuf),
+    /// The record could not be read: a genuine I/O failure.
+    Failed(Box<Diagnostic>),
+    /// The record, and whether a build with these inputs would produce the
+    /// container that is on disk: the inputs are the record's and the file is the
+    /// container the record describes.
+    Present {
+        record: Box<BuildRecord>,
+        up_to_date: bool,
+    },
+}
+
+/// Reads the record of the build that writes `output` and compares it with the
+/// inputs of the build that is about to run.
+pub(super) fn query(output: &Path, inputs: &BuildInputs) -> Query {
+    let Some(path) = RecordKind::Build.path(output) else {
+        return Query::Missing;
+    };
+    match build_record::read(&path) {
+        Ok(BuildRecordRead::Missing) => Query::Missing,
+        Ok(BuildRecordRead::Malformed) => Query::Malformed(path),
+        Ok(BuildRecordRead::Present(record)) => {
+            let up_to_date = record.is_up_to_date(inputs, output);
+            Query::Present { record, up_to_date }
+        }
+        Err(problem) => Query::Failed(Box::new(problem)),
+    }
+}
+
 /// Reads the record of the build that writes `output` and compares it with the
 /// build that is about to run.
 ///
@@ -37,24 +73,21 @@ pub(super) fn previous(output: &Path, inputs: &BuildInputs, may_skip: bool) -> P
         up_to_date: None,
         diagnostics: vec![],
     };
-    let Some(path) = RecordKind::Build.path(output) else {
-        return previous;
-    };
-    match build_record::read(&path) {
-        Ok(BuildRecordRead::Missing) => {}
-        Ok(BuildRecordRead::Malformed) => {
+    match query(output, inputs) {
+        Query::Missing => {}
+        Query::Malformed(path) => {
             previous
                 .diagnostics
                 .push(Diagnostic::codeless(codeless::record_malformed(
                     super::display_path(&path.to_string_lossy()),
                 )));
         }
-        Ok(BuildRecordRead::Present(record)) => {
-            if may_skip && record.is_up_to_date(inputs, output) {
+        Query::Present { record, up_to_date } => {
+            if may_skip && up_to_date {
                 previous.up_to_date = Some(record.application);
             }
         }
-        Err(problem) => previous.diagnostics.push(problem),
+        Query::Failed(problem) => previous.diagnostics.push(*problem),
     }
     previous
 }

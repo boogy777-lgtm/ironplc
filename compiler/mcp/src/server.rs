@@ -20,6 +20,7 @@ use crate::tools::hot_edit::{
     Target,
 };
 use crate::tools::messages::{MessageObjectsInput, MessagesInput};
+use crate::tools::online_compare::OnlineCompareInput;
 use crate::tools::pou_lineage::PouLineageInput;
 use crate::tools::pou_scope::PouScopeInput;
 use crate::tools::run::RunInput;
@@ -451,6 +452,36 @@ impl IronPlcMcp {
             })
             .await?;
         hot_edit_json(&response)
+    }
+
+    /// Compares a controller with the project.
+    #[tool(
+        name = "online_compare",
+        description = "Compares the controller named by `device` (`{address, port}` for a TCP connection, or `{device_id}` for a device that IronLink has a route to, see `browse_network`) with the project, as the editor does when it goes online: what the controller is, what it holds, what the project has, and which actions follow. The content hash is the only comparison; going online never refuses because the controller is another one. Pass the project as `sources` and `options` (compiled to find what the project has; without `sources` the controller is compared with no project). The server reads no file of the project, so there is no download record and no path record: a controller that holds anything but the compiled sources is `otherApplication`. The response has `comparison`: `row` and `rowNumber` (the headline: `unreachable`, `busy`, `protected`, `noApplication`, `upToDate`, `sourcesChanged`, `previousDownload`, `previousDownloadOtherLayout`, `otherApplication`, `connectionLost`), `summary`, `controller` (`deviceId`, `runtimeVersion`, `runState`, `editStage`, `holds`), `project` (`status`, `application`, `contentHash`, `layoutHash`), `information` (rows with a `kind` and a `text`: `editInProgress`, `buildFails`, `stopped`, `faulted`, `notPersisted`, `candidateLost`, `retainedDiscarded`, `containerFormatRefused` and others), `actions` (each of `monitor`, `onlineChange`, `download`, `upload`, `search`, `chooseAnother`, `retry`, `resolve` with `enabled` and, when not, the `reason` with its `code` and `text`) and `hotEdit` (`allowed`, `reason`): whether `hot_edit_accept` in `change` mode may begin. A controller that cannot be reached or serves another session (V6014) is a comparison with row `unreachable` or `busy`, `ok` true. Call it before `hot_edit_accept` with `device` to see whether a change or a `replace` fits."
+    )]
+    async fn online_compare(
+        &self,
+        Parameters(input): Parameters<OnlineCompareInput>,
+    ) -> Result<ContentBlock, rmcp::ErrorData> {
+        // Compiling stays on the thread that serves the request (the stack
+        // budget); only the exchange with the device leaves it.
+        let prepared = tools::online_compare::prepare_project(
+            input.sources.as_deref(),
+            input.options.as_ref(),
+            &self.cache,
+        );
+        let device = input.device;
+        let response = tokio::task::spawn_blocking(move || {
+            match tools::device::resolve(&device, crate::ironlink::IronLink::locate_here) {
+                Ok(resolved) => tools::online_compare::build_response(&prepared, &resolved),
+                Err(fault) => tools::online_compare::unresolved(&prepared, fault),
+            }
+        })
+        .await
+        .map_err(|e| rmcp::ErrorData::internal_error(e.to_string(), None))?;
+        let json = serde_json::to_string(&response)
+            .map_err(|e| rmcp::ErrorData::internal_error(e.to_string(), None))?;
+        Ok(ContentBlock::text(json))
     }
 
     /// Starts the scan of a device.

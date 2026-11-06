@@ -657,6 +657,39 @@ enum Action {
         #[command(subcommand)]
         command: RefactorAction,
     },
+    /// Compares the controller you went online to with the project and prints
+    /// the comparison as JSON (ADR 0089): what the controller is, what it
+    /// holds, what the project has, the information rows, every online action
+    /// with the reason it is not enabled, and whether an online change may
+    /// begin. The contents hash is the only comparison. The project is read as
+    /// `compile` reads it and compared with the last build without building;
+    /// the records beside `--output` are read.
+    OnlineCompare {
+        #[command(flatten)]
+        file_args: FileArgs,
+
+        /// The application container the project builds to; the build record,
+        /// the download record of the controller and the path record sit
+        /// beside it.
+        #[arg(short, long)]
+        output: PathBuf,
+
+        /// Activate a compatibility library by name (repeatable). See
+        /// `check --library`.
+        #[arg(long = "library")]
+        libraries: Vec<LibraryName>,
+
+        /// How the attempt to connect went. With `ok` (the default) the
+        /// identity of the controller is read from `--identity`.
+        #[arg(long = "attempt", value_enum, default_value = "ok")]
+        outcome: cli::ConnectOutcome,
+
+        /// The answer of the controller to `identity`, as JSON: a file, or `-`
+        /// for standard input. Required with `--attempt ok` and refused with
+        /// any other attempt.
+        #[arg(long, value_name = "FILE")]
+        identity: Option<PathBuf>,
+    },
     /// Records that a device received a container: writes the download record
     /// `<application>.<device-id>.download.iplcinfo` beside the application
     /// container (ADR 0083). The editor calls this after the device
@@ -878,6 +911,26 @@ fn execute(action: Action) -> Result<(), String> {
                 new_name,
             } => cli::map_uid(&project, &old_scope, &old_name, &new_scope, &new_name),
         },
+        Action::OnlineCompare {
+            file_args,
+            output,
+            libraries,
+            outcome,
+            identity,
+        } => {
+            println!(
+                "{}",
+                cli::online_compare(&cli::OnlineCompare {
+                    paths: &file_args.files,
+                    output: &output,
+                    compiler_options: file_args.compiler_options(),
+                    libraries: &libraries,
+                    outcome,
+                    identity: identity.as_deref(),
+                })?
+            );
+            Ok(())
+        }
         Action::RecordDownload {
             application,
             device_id,
