@@ -34,11 +34,17 @@ needs. The command is accepted on the wire and refused by the host:
 
 The candidate was not staged; a later ``getStatus`` reports no candidate.
 
+To replace the application on purpose (a download), accept the candidate in
+``replace`` mode: ``{"command":"acceptEdits","program":[...],"mode":"replace"}``.
+The layout is not compared then, the new application starts from its initial
+values, and only the ``PERSISTENT`` variables whose declaration is equal keep their
+value. See :ref:`ironplcvm-replace`.
+
 To fix this error, compile the candidate from a source edit that keeps the
 state layout unchanged (a code-body edit, including calls to functions, or a
 rename when stable variable IDs are assigned), or assign stable variable IDs so
-a declaration-level edit can migrate per variable. Until a schema edit can be migrated, apply it as a
-cold start: stop the runtime and load the new container. See
+a declaration-level edit can migrate per variable. When the edit is not an online change, accept it in ``replace`` mode as above
+instead of stopping the runtime. See
 :doc:`V4010` for the migration case, :doc:`V4020` when the candidate and the
 running application carry IDs but a persistent variable has none, and
 :doc:`V4016` for payloads that are not containers at all.

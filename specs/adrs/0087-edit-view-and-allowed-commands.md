@@ -2,7 +2,7 @@
 
 status: accepted
 date: 2026-11-06
-amended: 2026-11-06 (stages 4b-4d landed: the defects named in "What is not in this stage" are fixed, see "Exits fixed in class K1")
+amended: 2026-11-06 (stages 4b-4d landed: the defects named in "What is not in this stage" are fixed, see "Exits fixed in class K1"; the replace kind is added, see ADR-0088)
 
 ## Context and Problem Statement
 
@@ -110,6 +110,14 @@ that predates it omits it.
   is already staged); the engineer finishes such an edit with Next.
 * **Commands as a map.** The five edit commands are keyed by their wire names,
   so a new `EditCommand` is a new key and not a new field.
+
+**Replace (ADR-0088).** A candidate accepted in `replace` mode (a Download) is a third
+kind of candidate beside a change and a migration. The edit state carries the kind
+(`CandidateKind`), the table asks the kind whether the candidate can be reverted
+(`reverts`), and the view gains the stage `testingReplace`. The rows are those of a
+migration: untest and cancel under Test are refused with V4011, accept is allowed in
+every state without a candidate, and assemble ends the edit. The walk test and the
+golden file have the three replace states.
 
 **Extension of the class.** A new command is one `EditCommand` variant, its rows
 in `edit_guard`, and its label. The view, the wire and the golden file follow.

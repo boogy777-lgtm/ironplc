@@ -363,6 +363,21 @@ reverts to the original program at the next scan boundary and discards the
 candidate there. A candidate of a state migration under test can only be
 assembled, and ``cancel`` is refused with :doc:`V4011 </reference/runtime/problems/V4011>`.
 
+:literal:`hot_edit_accept` takes the optional ``mode``. ``change`` (the default)
+continues the running program: a body edit, or a state migration when the layout
+differs. ``replace`` is a download: the layout is not compared, the program is
+replaced and starts from its initial values at the next scan boundary, and only the
+``PERSISTENT`` variables whose declaration is equal (the same stable variable ID,
+qualifier and type) keep their value. The response then has the field
+``reinitialised``, the ``PERSISTENT`` variables of the running program that start
+again, each with its ``uid``, its ``name`` when known and the ``reason``
+(``noStableId``, ``notInCandidate``, ``qualifierChanged``, ``typeChanged`` or
+``unsupportedType``). A replace goes through :literal:`hot_edit_test` and
+:literal:`hot_edit_assemble` like any candidate, and like a state migration it can
+only be assembled once it runs. The workstation does not hold a replace back for
+stable variable IDs that are out of sync: the variables without an ID are listed in
+``reinitialised``. See :ref:`ironplcvm-replace`.
+
 Every one of them takes an optional ``device`` that names a device to act on
 instead, over the session protocol that the editor uses. Name the device by
 ``address`` and optionally ``port`` (the session port, 49152, when omitted), or

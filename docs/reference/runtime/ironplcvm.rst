@@ -94,7 +94,8 @@ Commands
 
    Commands are the hot-edit protocol commands: ``getStatus``, ``acceptEdits``
    (the compiled container as a JSON array of byte values, plus an optional
-   ``migration`` map of stable-UID decisions — ``"init"`` or ``"preserve"``),
+   ``migration`` map of stable-UID decisions — ``"init"`` or ``"preserve"`` — and
+   an optional ``mode``, ``"change"`` or ``"replace"``, see :ref:`ironplcvm-replace`),
    ``testEdits``, ``untestEdits``, ``assembleEdits`` and ``cancelEdits``, and
    ``identity`` and ``setDeviceSettings`` for the device itself (see
    :ref:`ironplcvm-device-settings`), and ``startScan`` and ``stopScan`` for the
@@ -274,7 +275,9 @@ or refuse the command. A device that predates the field omits it.
    staged and the original executes), ``testing`` (the candidate executes),
    ``testingMigration`` (the candidate of a state migration executes, and
    ``untestEdits`` and ``cancelEdits`` are refused with
-   :doc:`V4011 <problems/V4011>`: only ``assembleEdits`` ends the edit) or
+   :doc:`V4011 <problems/V4011>`: only ``assembleEdits`` ends the edit),
+   ``testingReplace`` (the same for the candidate of a download, see
+   :ref:`ironplcvm-replace`) or
    ``swapPending`` (a ``testEdits``, ``untestEdits`` or ``cancelEdits`` waits for
    the next scan boundary, and no edit command is allowed until then).
 
@@ -454,6 +457,87 @@ A settings file that the device cannot use stops :program:`ironplcvm serve`
 with :doc:`V6015 <problems/V6015>`. The device does not replace a damaged file
 with a new identity.
 
+.. _ironplcvm-replace:
+
+Download: the replace mode
+==========================
+
+A download replaces the program that runs with another one. It is an
+``acceptEdits`` with ``"mode": "replace"``; the default mode, ``"change"``, is
+the online change of the other sections. A replace goes through the same
+commands as every candidate: ``acceptEdits`` stages it, ``testEdits`` runs it and
+``assembleEdits`` commits it. It is accepted when no other candidate is staged,
+whatever the state of the device.
+
+The device does not compare the layout, the task schedule or the process-image
+sizes of a replace, so the candidate may differ from the running program in all
+of them; the container itself is checked as for every candidate (the format, the
+hashes and the bytecode verifier). The accept is answered with ``accepted``
+instead of ``ack``:
+
+.. code-block:: json
+
+   {"response": "accepted", "reinitialised": [
+     {"uid": 2, "name": "Retyped", "reason": "typeChanged"},
+     {"uid": 3, "name": "Gone", "reason": "notInCandidate"}]}
+
+When the replace is tested, at the next scan boundary, the device builds the
+state of the new program from scratch and runs its initialisation, and then
+copies over it the values of the ``PERSISTENT`` variables whose declaration is
+equal in both programs. Every other variable, a ``RETAIN`` variable included,
+starts at its initial value. This is the behaviour of CODESYS for a download. The
+status reports ``candidateMode`` ``replace`` while the candidate is staged, and the
+edit view the stage ``testingReplace`` while it runs.
+
+``reinitialised``
+   The ``PERSISTENT`` variables of the running program that start again, so that a
+   reset is never silent. It is empty when every one is kept. Each entry has the
+   ``uid`` (absent when the variable has none), the ``name`` (when the program
+   carries debug information) and the ``reason``:
+
+   .. list-table::
+      :header-rows: 1
+
+      * - Reason
+        - Meaning
+      * - ``noStableId``
+        - The variable has no stable variable ID in the running program, or the
+          downloaded program carries none, so the two cannot be matched.
+      * - ``notInCandidate``
+        - The downloaded program has no variable with this ID.
+      * - ``qualifierChanged``
+        - The downloaded program declares the variable without ``PERSISTENT``.
+      * - ``typeChanged``
+        - The type, string length, array bounds or function block layout differ.
+      * - ``unsupportedType``
+        - The device cannot yet carry a value of this type across a download (an
+          instance of a standard function block, or of a block with a string field).
+
+"Equal" means the same stable variable ID (the project keeps them in
+:file:`{name}.uids.json`; create and update the file with
+``ironplcc refactor sync-uids``), the same ``PERSISTENT`` qualifier and equal type
+data. A project that was never synchronised has no IDs, and a download of it keeps
+nothing and lists every ``PERSISTENT`` variable as ``noStableId``.
+
+.. warning::
+
+   The rule is by declaration, as in CODESYS. A variable whose meaning changes
+   while its declaration stays equal keeps its old value. Change the name or the
+   type of the variable when the old value must not survive.
+
+A replace has no way back once it runs: the device keeps no copy of the old state,
+so ``untestEdits`` and ``cancelEdits`` under test are refused with
+:doc:`V4011 <problems/V4011>`, as for a state migration, and ``assembleEdits`` ends
+the edit. Before ``testEdits``, ``cancelEdits`` discards the candidate and the
+running program is untouched. The values the download kept are written to the
+retained file when ``assembleEdits`` commits (see :ref:`ironplcvm-retained-values`),
+so a restart after the download keeps them.
+
+On a redundant pair the standby receives the candidate by the rule of an online
+change and not as a replace, so a download whose layout differs is refused there
+unless both programs carry stable variable IDs; the pair then does not report itself
+ready. The state of the standby follows the replicated state of the primary.
+
 .. _ironplcvm-retained-values:
 
 Retained values
@@ -547,8 +631,8 @@ the ``identity`` answer, next to ``retained``:
 ``candidateLost``
    Present exactly when the previous run ended with an unfinished edit. ``name``
    and ``origin`` are present when the ``acceptEdits`` that staged the candidate
-   gave them. ``stage`` is ``accepted``, ``testing`` or ``testingMigration``, and
-   is absent when the note was damaged and could not be read, so that only the
+   gave them. ``stage`` is ``accepted``, ``testing``, ``testingMigration`` or
+   ``testingReplace``, and is absent when the note was damaged and could not be read, so that only the
    loss is known. A device that predates the field omits it.
 
    .. code-block:: json
