@@ -27,6 +27,7 @@ suite('ProblemCode', () => {
     assert.strictEqual(ProblemCode.ConnectionPortInvalid, 'E0012');
     assert.strictEqual(ProblemCode.ConnectFailed, 'E0013');
     assert.strictEqual(ProblemCode.ConnectionLost, 'E0014');
+    assert.strictEqual(ProblemCode.StaleBaseline, 'E0015');
   });
 
   test('ProblemCode_when_ironlink_codes_accessed_then_returns_expected_codes', () => {

@@ -1,0 +1,43 @@
+=====
+E0015
+=====
+
+.. problem-summary:: E0015
+
+.. note::
+
+   **Deprecated.** The editor no longer reports E0015. The code stays reserved
+   so that links to this page keep working, and it is never given another
+   meaning.
+
+E0015 was the refusal of the Accept stage of an online edit when the
+application on the device was not the one this project last downloaded to it:
+another engineer had edited the device, or the device ran something else than
+it did before. The editor compared the content hash the device reported with
+the download record of the project and refused the edit on a mismatch.
+
+The go-online comparison replaces that check. When the editor connects to a
+controller, it asks the compiler to compare what the controller holds with what
+the project has and with what this workstation last downloaded (see
+:doc:`/reference/editor/overview` and the ``online-compare`` command of
+:doc:`/reference/compiler/ironplcc`). The comparison never refuses the
+connection. It names the state of the controller and the actions that follow
+from it, each with the reason when it is not available.
+
+What used to be E0015 now appears as follows:
+
+- **The controller holds an application that this workstation did not send.**
+  The comparison shows the row *otherApplication*. An online change is not
+  available, with the reason that it cannot be based on an application this
+  workstation does not know, and **Download** is offered to replace it.
+- **The device does not report the content hash of its application.** The
+  comparison adds the information row *contentNotReported*, and an online
+  change is not available.
+
+**Solutions**:
+
+1. Connect again and read the comparison: it says what the controller holds and
+   which actions are available.
+2. To deploy over an application this workstation did not send, use
+   **IronPLC: Download to Controller**, which replaces the application and keeps
+   only the PERSISTENT variables whose declaration did not change.
