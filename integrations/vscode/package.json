@@ -151,6 +151,11 @@
         "category": "IronPLC"
       },
       {
+        "command": "ironplc.onlineEdit",
+        "title": "Online Edit",
+        "category": "IronPLC"
+      },
+      {
         "command": "ironplc.runController",
         "title": "Run Controller",
         "category": "IronPLC"

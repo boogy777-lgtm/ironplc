@@ -26,6 +26,7 @@ import { registerHandoffCommands } from './handoffCommands';
 import { registerDevicePanel } from './devicePanel';
 import { registerHaPanel } from './haPanel';
 import { registerBuildCommands } from './buildCommands';
+import { registerOnlineEditCommands } from './onlineEditCommands';
 import { registerBuildApplication } from './buildApplication';
 import { registerControllerRunCommands } from './controllerRunCommands';
 import { BUILD_AREA_NAME } from './buildAreaLogic';
@@ -192,7 +193,8 @@ export function activate(context: vscode.ExtensionContext) {
   const buildArea = vscode.window.createOutputChannel(BUILD_AREA_NAME);
   context.subscriptions.push(buildArea);
   registerBuildApplication(context, result?.path, buildArea, showProblem);
-  registerBuildCommands(context, result?.path, sourceExtensions, connection, showProblem, buildArea, showCodedText);
+  const buildSupport = registerBuildCommands(context, result?.path, sourceExtensions, connection, showProblem, buildArea, showCodedText);
+  registerOnlineEditCommands(context, buildSupport, connection, sourceExtensions, showProblem, showCodedText);
   registerControllerRunCommands(context, connection, showCodedText);
 
   if (!result) {

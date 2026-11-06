@@ -459,6 +459,18 @@ suite('download record guards', () => {
     assert.strictEqual(source.text.split('connection.recordDownload(').length - 1, 1);
   });
 
+  test('onlineEditCommands_when_scanned_then_it_compiles_and_records_through_the_build_support_only', () => {
+    const source = extensionSources().find(candidate => candidate.file === 'onlineEditCommands.ts');
+
+    assert.ok(source);
+    // The compile and the recorder exist once, in buildCommands.ts; the dialog calls them.
+    assert.strictEqual(source.text.split('support.compile(').length - 1, 1);
+    assert.strictEqual(source.text.split('support.acknowledgeAssemble(').length - 1, 1);
+    for (const own of ['recordDownload(', 'buildContainer(', 'runCompiler(', 'compileSourceToContainer(']) {
+      assert.ok(!source.text.includes(own), `onlineEditCommands.ts calls ${own}`);
+    }
+  });
+
   test('buildCommands_when_scanned_then_only_the_download_keeps_the_container_and_registers_its_table_command', () => {
     const source = extensionSources().find(candidate => candidate.file === 'buildCommands.ts');
 

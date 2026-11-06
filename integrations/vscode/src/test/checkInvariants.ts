@@ -4,6 +4,7 @@ import * as path from 'path';
 import { connectionTransports } from '../connectionMethods';
 import { SCAN_ACTIONS, scanActionNames } from '../controllerRunLogic';
 import { DOWNLOAD_ACTIONS, downloadActionNames } from '../downloadLogic';
+import { ONLINE_EDIT } from '../onlineEditLogic';
 import { DEFAULT_SESSION_PORT, SUPPORTED_SESSION_PROTOCOL } from '../sessionConstants';
 import { findGatewayViolations, HANDOFF_ACTIONS, handoffNames } from '../vscodeCommon';
 
@@ -86,6 +87,21 @@ for (const name of downloadActionNames()) {
   }
   if (!readme.includes(`**IronPLC: ${title}**`)) {
     failures.push(`README.md does not name the command '${title}' of the download action '${name}'`);
+  }
+}
+
+// The online-edit dialog's command is contributed with the title the logic gives
+// it and is named in the README.
+{
+  const contributed = packageJson.contributes.commands.find((cmd: { command: string }) => cmd.command === ONLINE_EDIT.commandId);
+  if (contributed === undefined) {
+    failures.push(`The online edit dialog names the command '${ONLINE_EDIT.commandId}', which package.json does not contribute`);
+  }
+  else if (contributed.title !== ONLINE_EDIT.title) {
+    failures.push(`The online edit dialog is titled '${ONLINE_EDIT.title}', but package.json titles '${ONLINE_EDIT.commandId}' '${contributed.title}'`);
+  }
+  if (!readme.includes(`**IronPLC: ${ONLINE_EDIT.title}**`)) {
+    failures.push(`README.md does not name the command '${ONLINE_EDIT.title}' of the online edit dialog`);
   }
 }
 

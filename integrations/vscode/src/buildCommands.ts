@@ -56,16 +56,38 @@ import {
 import { createMigrationDecisionUi, createSyncResolutionUi, resolvePathInteractive } from './hotEdit';
 
 /** The container a build sends: the file it is read from, and its bytes. */
-interface SentContainer {
+export interface SentContainer {
   path: string;
   bytes: Uint8Array;
 }
 
 /** The advisory origin label every build stamps on its pending-edit record. */
-const BUILD_ORIGIN = 'ironplc-vscode';
+export const BUILD_ORIGIN = 'ironplc-vscode';
+
+/** What the person is told when a build would go over an application that was not downloaded from this project (E0015). */
+export const STALE_BASELINE_DETAIL
+  = 'The application on the device is not the one this project last downloaded to it. Re-sync the project from the device, rebuild, then connect again.';
 
 /** A step of a Download failed and the person has been told: the sequence stops quietly. */
 class ReportedError extends Error {}
+
+/**
+ * What the commands that send a build share, so each step exists once: the
+ * session of the open connection, the compile into the Build area and the
+ * handling of an acknowledged assemble. The Download and the online-edit dialog
+ * use them.
+ */
+export interface BuildSupport {
+  /** The session of the open connection, or undefined with a warning when there is none. */
+  connectedSession(): Promise<HotEditSession | undefined>;
+  /**
+   * Compiles the program into the Build area (or reads the container). A
+   * failure is reported as E0006 and answers undefined.
+   */
+  compile(program: string): Promise<SentContainer | undefined>;
+  /** The device acknowledged an assemble of `container`: records the download. */
+  acknowledgeAssemble(container: string, status: HotEditStatus, keepContainer?: boolean): Promise<void>;
+}
 
 export function registerBuildCommands(
   context: vscode.ExtensionContext,
@@ -76,7 +98,7 @@ export function registerBuildCommands(
   buildArea: BuildAreaChannel,
   /** Shows an error whose text starts with its code, with the link to the page of the code. */
   showCoded: (code: string, text: string) => void,
-): void {
+): BuildSupport {
   context.subscriptions.push(
     vscode.commands.registerCommand('ironplc.build', () => build(false)),
     vscode.commands.registerCommand('ironplc.buildTrial', () => build(true)),
@@ -104,10 +126,7 @@ export function registerBuildCommands(
       return;
     }
     if (connection.baselineState === 'mismatch') {
-      reportProblem(
-        ProblemCode.StaleBaseline,
-        'The application on the device is not the one this project last downloaded to it. Re-sync the project from the device, rebuild, then connect again.',
-      );
+      reportProblem(ProblemCode.StaleBaseline, STALE_BASELINE_DETAIL);
       return;
     }
 
@@ -122,16 +141,9 @@ export function registerBuildCommands(
     }
 
     connection.setBuildPhase('compiling');
-    let sent: SentContainer;
-    try {
-      sent = await compileProgram(program);
-    }
-    catch (err) {
+    const sent = await compileReported(program);
+    if (sent === undefined) {
       connection.setBuildPhase(null);
-      reportProblem(
-        ProblemCode.CompileFailed,
-        `${program}: ${err instanceof Error ? err.message : String(err)} (see the "IronPLC Build" output for details).`,
-      );
       return;
     }
 
@@ -205,16 +217,11 @@ export function registerBuildCommands(
         () => syncProjectIds(program),
       ),
       compile: async () => {
-        try {
-          return await compileProgram(program);
-        }
-        catch (err) {
-          reportProblem(
-            ProblemCode.CompileFailed,
-            `${program}: ${err instanceof Error ? err.message : String(err)} (see the "IronPLC Build" output for details).`,
-          );
+        const sent = await compileReported(program);
+        if (sent === undefined) {
           throw new ReportedError('compile failed');
         }
+        return sent;
       },
       confirm: async (request) => {
         const { message, detail } = formatReplaceConfirmation(request);
@@ -335,6 +342,20 @@ export function registerBuildCommands(
     void vscode.window.showInformationMessage(`IronPLC Build & Trial: ${formatStatusText(post)}.`);
   }
 
+  /** Compiles the program; a failure is reported as E0006 and answers undefined. */
+  async function compileReported(program: string): Promise<SentContainer | undefined> {
+    try {
+      return await compileProgram(program);
+    }
+    catch (err) {
+      reportProblem(
+        ProblemCode.CompileFailed,
+        `${program}: ${err instanceof Error ? err.message : String(err)} (see the "IronPLC Build" output for details).`,
+      );
+      return undefined;
+    }
+  }
+
   /**
    * Compiles a source program into the Build area, which shows everything the
    * compiler wrote, also when it fails; a container is read as-is (nothing is
@@ -353,4 +374,6 @@ export function registerBuildCommands(
     const container = await buildContainer(buildArea, compilerPath, program, os.tmpdir(), currentCompilerSettings());
     return { path: container, bytes: await readFile(container) };
   }
+
+  return { connectedSession, compile: compileReported, acknowledgeAssemble };
 }

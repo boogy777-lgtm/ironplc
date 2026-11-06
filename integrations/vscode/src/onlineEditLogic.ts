@@ -27,6 +27,9 @@
 import { BuildPhase } from './buildLogic';
 import { CandidateMode, EditCommandView, EditView, HotEditStatus } from './hotEditSession';
 
+/** The command that opens the dialog; `checkInvariants` checks that package.json contributes it and the README names it. */
+export const ONLINE_EDIT = { commandId: 'ironplc.onlineEdit', title: 'Online Edit' } as const;
+
 /** The one fact about Build: whether a build of the current sources succeeded in this dialog. */
 export type BuildFact = 'notBuilt' | 'built';
 
