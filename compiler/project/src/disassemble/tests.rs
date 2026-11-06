@@ -2,7 +2,9 @@
 
 use super::*;
 use ironplc_container::test_support::{round_trip, steel_thread_single_function_container};
-use ironplc_container::{ContainerBuilder, FieldType, FunctionId, VarEntry, VAR_FLAG_IS_ARRAY};
+use ironplc_container::{
+    ContainerBuilder, FieldType, FunctionId, RetainKind, RetainedRun, VarEntry, VAR_FLAG_IS_ARRAY,
+};
 use rstest::rstest;
 use std::io::Write;
 use tempfile::NamedTempFile;
@@ -106,7 +108,7 @@ fn first_instruction(bytecode: Vec<u8>) -> serde_json::Value {
 fn disassemble_when_steel_thread_then_header_has_format_version() {
     let container = steel_thread_container();
     let result = disassemble(&container);
-    assert_eq!(result["header"]["formatVersion"], 8);
+    assert_eq!(result["header"]["formatVersion"], 9);
 }
 
 #[test]
@@ -285,7 +287,7 @@ fn disassemble_file_when_valid_iplc_then_returns_header() {
     tmp.flush().unwrap();
 
     let result = disassemble_file(tmp.path());
-    assert_eq!(result["header"]["formatVersion"], 8);
+    assert_eq!(result["header"]["formatVersion"], 9);
     assert_eq!(result["header"]["numVariables"], 2);
 }
 
@@ -831,4 +833,46 @@ fn decode_when_const_pool_index_out_of_range_then_comment_shows_invalid() {
     let result = disassemble(&container);
     let instr = &result["functions"][0]["instructions"][0];
     assert_eq!(instr["comment"], "= <invalid pool index 99>");
+}
+
+// ---------------------------------------------------------------
+// Retained run tests
+// ---------------------------------------------------------------
+
+#[test]
+fn disassemble_when_nothing_retained_then_retained_runs_is_empty() {
+    let result = disassemble(&steel_thread_container());
+
+    assert_eq!(result["retainedRuns"], json!([]));
+}
+
+#[test]
+fn disassemble_when_runs_retained_then_each_run_names_kind_space_start_and_len() {
+    let container = ContainerBuilder::new()
+        .num_variables(2)
+        .data_region_bytes(32)
+        .add_function(FunctionId::new(0), &[0x8C], 0, 2, 0)
+        .add_var_entry(VarEntry {
+            var_type: FieldType::I32,
+            flags: 0,
+            extra: 0,
+        })
+        .add_var_entry(VarEntry {
+            var_type: FieldType::I32,
+            flags: 0,
+            extra: 0,
+        })
+        .add_retained_run(RetainedRun::slots(RetainKind::Retain, 0, 1))
+        .add_retained_run(RetainedRun::bytes(RetainKind::Persistent, 8, 16))
+        .build();
+
+    let result = disassemble(&round_trip(&container));
+
+    assert_eq!(
+        result["retainedRuns"],
+        json!([
+            {"kind": "retain", "space": "slots", "start": 0, "len": 1},
+            {"kind": "persistent", "space": "bytes", "start": 8, "len": 16},
+        ])
+    );
 }

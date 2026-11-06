@@ -24,7 +24,7 @@ use super::{
 };
 use crate::compile_fn::{compile_user_function, compile_user_function_block};
 use crate::compile_initial_value::{emit_initial_values, emit_temporaries_prologue};
-use crate::compile_setup::{assign_variables, Placement};
+use crate::compile_setup::{assign_persistent_variables, assign_variables, Placement};
 use crate::compile_stmt::compile_body;
 use crate::emit::Emitter;
 use crate::persistent::{call_scoped_declarations, program_declarations};
@@ -254,13 +254,12 @@ pub(super) fn compile_program_with_functions(
 
     // Assign global variable indices first (indices 0..G), after the pre-scan so
     // that a global user-defined instance resolves its type like a local one.
-    assign_variables(
+    assign_persistent_variables(
         &mut ctx,
         &mut builder,
         global_vars,
         types,
         &options.stable_var_ids,
-        Placement::Program,
     )?;
     let num_globals = ctx.variables.len() as u16;
 
@@ -275,13 +274,12 @@ pub(super) fn compile_program_with_functions(
     // may appear in `options.stable_var_ids`; function/FB/method slots are
     // assigned later by their own compilation paths and never reach the
     // lookup (ADR 0053).
-    assign_variables(
+    assign_persistent_variables(
         &mut ctx,
         &mut builder,
         &local_vars,
         types,
         &options.stable_var_ids,
-        Placement::Program,
     )?;
     let program_var_count = ctx.variables.len() as u16;
     // The persistent part ends here: every variable slot and every byte of the
@@ -297,6 +295,9 @@ pub(super) fn compile_program_with_functions(
         data_start: 0,
         data_len: ctx.data_region_offset,
     };
+    // The retained runs are taken at the same point and for the same reason:
+    // only the declarations assigned above recorded any (ADR-0085).
+    let retained_runs = std::mem::take(&mut ctx.retained_runs);
 
     // The program's `VAR_TEMP` variables are working memory: they take the
     // slots and the data region right after the persistent part, where the
@@ -559,6 +560,10 @@ pub(super) fn compile_program_with_functions(
     // is a defensive backstop that surfaces an internal error.
     let max_call_depth =
         crate::call_graph::compute_max_call_depth(&ctx.call_graph, FunctionId::SCAN)?;
+
+    for run in retained_runs {
+        builder = builder.add_retained_run(run);
+    }
 
     builder = builder
         .init_function_id(FunctionId::INIT)

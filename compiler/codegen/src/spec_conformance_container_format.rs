@@ -205,3 +205,49 @@ fn container_spec_req_cf_028_fb_type_descriptor_lists_the_fields_of_each_user_bl
         usize::from(type_section.user_fb_types[0].num_fields)
     );
 }
+
+/// REQ-CF-codegen-029: the compiler declares the retained runs where it
+/// assigns the storage of each persistent declaration: a `RETAIN` variable
+/// contributes its slot and its data region bytes, an unqualified instance
+/// contributes the slots of the fields its type declares `RETAIN`, and a
+/// `NON_RETAIN` or unqualified variable and every working slot contribute
+/// nothing.
+#[spec_test(REQ_CF_codegen_029)]
+fn container_spec_req_cf_029_retained_runs_follow_the_qualifiers() {
+    use ironplc_container::{RetainKind, RetainedRun};
+
+    let container = compiled_container_with_fb_uids(
+        "FUNCTION_BLOCK keeper
+             VAR other : DINT; END_VAR
+             VAR RETAIN kept : DINT; END_VAR
+             kept := kept + 1;
+         END_FUNCTION_BLOCK
+
+         FUNCTION scratch : DINT
+             VAR_INPUT i : DINT; END_VAR
+             scratch := i;
+         END_FUNCTION
+
+         PROGRAM main
+             VAR plain : DINT; END_VAR
+             VAR RETAIN saved : STRING[4]; END_VAR
+             VAR inst : keeper; END_VAR
+             inst();
+             plain := scratch(i := 1);
+         END_PROGRAM",
+        &[],
+    );
+
+    // Slots: plain 0, saved 1, inst 2. Data: saved's string run, then the
+    // two-slot instance whose second slot (`kept`) is retained.
+    let saved_bytes =
+        ironplc_container::string_region_size(4, ironplc_container::CharWidth::Narrow);
+    assert_eq!(
+        container.retained_runs(),
+        vec![
+            RetainedRun::slots(RetainKind::Retain, 1, 1),
+            RetainedRun::bytes(RetainKind::Retain, 0, saved_bytes),
+            RetainedRun::bytes(RetainKind::Retain, saved_bytes + 8, 8),
+        ]
+    );
+}

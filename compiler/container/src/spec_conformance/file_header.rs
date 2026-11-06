@@ -27,10 +27,10 @@ fn container_spec_req_cf_002_magic_is_iplc() {
     assert_eq!(bytes, [0x43, 0x4C, 0x50, 0x49]);
 }
 
-/// REQ-CF-container-003: Format version is 8.
+/// REQ-CF-container-003: Format version is 9.
 #[spec_test(REQ_CF_container_003)]
-fn container_spec_req_cf_003_format_version_is_8() {
-    assert_eq!(FORMAT_VERSION, 8);
+fn container_spec_req_cf_003_format_version_is_9() {
+    assert_eq!(FORMAT_VERSION, 9);
 }
 
 /// REQ-CF-container-004: All multi-byte values in the header are little-endian.

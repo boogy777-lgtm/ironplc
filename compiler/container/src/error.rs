@@ -10,8 +10,9 @@ pub enum ContainerError {
     Io(std::io::Error),
     /// The file does not start with the expected magic number.
     InvalidMagic,
-    /// The container format version is not supported.
-    UnsupportedVersion,
+    /// The container format version is not supported. Carries the version the
+    /// file declares and the one this reader supports.
+    UnsupportedVersion { found: u16, supported: u16 },
     /// A constant entry has an unrecognized type tag.
     InvalidConstantType(u8),
     /// A constant pool index is out of bounds.
@@ -44,6 +45,12 @@ pub enum ContainerError {
         element_type: u8,
         element_stride: u32,
     },
+    /// A retained run's kind byte is not a recognized [`crate::RetainKind`]
+    /// discriminant (1 = `Retain`, 2 = `Persistent`).
+    InvalidRetainKind(u8),
+    /// A retained run's space byte is not a recognized
+    /// [`crate::RetainSpace`] discriminant (0 = `Slots`, 1 = `Bytes`).
+    InvalidRetainSpace(u8),
 }
 
 impl fmt::Display for ContainerError {
@@ -52,7 +59,10 @@ impl fmt::Display for ContainerError {
             #[cfg(feature = "std")]
             ContainerError::Io(e) => write!(f, "I/O error: {e}"),
             ContainerError::InvalidMagic => write!(f, "invalid magic number"),
-            ContainerError::UnsupportedVersion => write!(f, "unsupported container format version"),
+            ContainerError::UnsupportedVersion { found, supported } => write!(
+                f,
+                "unsupported container format version {found}: this reader supports version {supported}"
+            ),
             ContainerError::InvalidConstantType(t) => {
                 write!(f, "invalid constant type tag: {t}")
             }
@@ -88,6 +98,12 @@ impl fmt::Display for ContainerError {
                     "invalid array element stride {element_stride} for element type {element_type}"
                 )
             }
+            ContainerError::InvalidRetainKind(t) => {
+                write!(f, "invalid retained run kind: {t}")
+            }
+            ContainerError::InvalidRetainSpace(t) => {
+                write!(f, "invalid retained run space: {t}")
+            }
         }
     }
 }
@@ -122,9 +138,28 @@ mod tests {
     }
 
     #[test]
-    fn container_error_display_when_unsupported_version_then_mentions_version() {
-        let msg = ContainerError::UnsupportedVersion.to_string();
-        assert!(msg.contains("version"), "got: {msg}");
+    fn container_error_display_when_unsupported_version_then_names_found_and_supported() {
+        let msg = ContainerError::UnsupportedVersion {
+            found: 8,
+            supported: 9,
+        }
+        .to_string();
+        assert!(msg.contains("version 8"), "got: {msg}");
+        assert!(msg.contains("supports version 9"), "got: {msg}");
+    }
+
+    #[test]
+    fn container_error_display_when_invalid_retain_kind_then_contains_tag() {
+        let msg = ContainerError::InvalidRetainKind(9).to_string();
+        assert!(msg.contains('9'), "got: {msg}");
+        assert!(msg.contains("kind"), "got: {msg}");
+    }
+
+    #[test]
+    fn container_error_display_when_invalid_retain_space_then_contains_tag() {
+        let msg = ContainerError::InvalidRetainSpace(7).to_string();
+        assert!(msg.contains('7'), "got: {msg}");
+        assert!(msg.contains("space"), "got: {msg}");
     }
 
     #[test]
@@ -203,7 +238,12 @@ mod tests {
     #[test]
     fn container_error_source_when_non_io_then_returns_none() {
         assert!(ContainerError::InvalidMagic.source().is_none());
-        assert!(ContainerError::UnsupportedVersion.source().is_none());
+        assert!(ContainerError::UnsupportedVersion {
+            found: 1,
+            supported: 2
+        }
+        .source()
+        .is_none());
         assert!(ContainerError::SectionSizeMismatch.source().is_none());
     }
 

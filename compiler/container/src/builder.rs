@@ -13,6 +13,7 @@ use crate::debug_section::{
 use crate::header::FileHeader;
 use crate::id_types::{FunctionId, InstanceId, TaskId, VarIndex};
 use crate::persistent_extent::PersistentExtent;
+use crate::retained_extent::{canonical_runs, RetainedRun};
 use crate::task_table::{ProgramInstanceEntry, TaskEntry, TaskTable};
 use crate::task_type::TaskType;
 use crate::type_section::{
@@ -48,6 +49,7 @@ pub struct ContainerBuilder {
     stable_vars: Vec<StableVarEntry>,
     fb_field_uids: Vec<FbFieldUidEntry>,
     persistent_extents: Vec<PersistentExtent>,
+    retained_runs: Vec<RetainedRun>,
     debug_var_names: Vec<VarNameEntry>,
     debug_func_names: Vec<FuncNameEntry>,
     debug_line_map: Vec<LineMapEntry>,
@@ -81,6 +83,7 @@ impl ContainerBuilder {
             stable_vars: Vec::new(),
             fb_field_uids: Vec::new(),
             persistent_extents: Vec::new(),
+            retained_runs: Vec::new(),
             debug_var_names: Vec::new(),
             debug_func_names: Vec::new(),
             debug_line_map: Vec::new(),
@@ -305,6 +308,16 @@ impl ContainerBuilder {
         self
     }
 
+    /// Declares one run of retained variable slots or retained data region
+    /// bytes. The builder sorts the runs and merges adjacent runs of one kind
+    /// when it builds, so the order of the calls and the way a producer splits
+    /// a run do not reach the container. A builder that declares no run builds
+    /// a container that retains nothing (see [`Container::retained_runs`]).
+    pub fn add_retained_run(mut self, run: RetainedRun) -> Self {
+        self.retained_runs.push(run);
+        self
+    }
+
     /// Adds a variable table entry to the type section. Entries are stored
     /// in call order, which is the variable index order.
     pub fn add_var_entry(mut self, entry: VarEntry) -> Self {
@@ -411,6 +424,7 @@ impl ContainerBuilder {
             || !self.stable_vars.is_empty()
             || !self.fb_field_uids.is_empty()
             || !self.persistent_extents.is_empty()
+            || !self.retained_runs.is_empty()
         {
             Some(TypeSection {
                 fb_types: self.fb_types,
@@ -420,6 +434,7 @@ impl ContainerBuilder {
                 stable_vars: self.stable_vars,
                 fb_field_uids: self.fb_field_uids,
                 persistent_extents: self.persistent_extents,
+                retained_runs: canonical_runs(self.retained_runs),
             })
         } else {
             None

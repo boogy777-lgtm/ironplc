@@ -64,6 +64,10 @@ pub(crate) struct CompileContext {
     pub(crate) compiler_options: CompilerOptions,
     /// Next available byte offset in the data region.
     pub(crate) data_region_offset: u32,
+    /// The runs of retained variable slots and data region bytes recorded so
+    /// far (see `crate::retained`). Only the persistent declarations record
+    /// here, so the runs lie in the persistent extent by construction.
+    pub(crate) retained_runs: Vec<ironplc_container::RetainedRun>,
     /// Maximum string capacity across all STRING variables (for temp buffer sizing).
     pub(crate) max_string_capacity: u16,
     /// True when any WSTRING (wide) string is declared. Temp buffers are then
@@ -166,6 +170,7 @@ impl CompileContext {
             struct_array_vars: HashMap::new(),
             in_out_params: HashSet::new(),
             data_region_offset: 0,
+            retained_runs: Vec::new(),
             max_string_capacity: 0,
             has_wide_string: false,
             debug_var_names: Vec::new(),

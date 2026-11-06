@@ -100,3 +100,34 @@ fn container_spec_req_cf_039_layout_hash_covers_the_persistent_part_only() {
     assert_ne!(base, extent);
     assert_ne!(base, fb_field);
 }
+
+/// REQ-CF-container-044: The retained runs are excluded from `layout_hash`:
+/// two containers that differ only in the qualifiers of their variables have
+/// the same layout hash and different retained runs.
+#[spec_test(REQ_CF_container_044)]
+fn container_spec_req_cf_044_retained_runs_are_not_part_of_the_layout_hash() {
+    use crate::retained_extent::{RetainKind, RetainedRun};
+
+    let build = |runs: &[RetainedRun]| {
+        let mut builder = ContainerBuilder::new()
+            .num_variables(2)
+            .data_region_bytes(16)
+            .add_function(FunctionId::INIT, &[0x8C], 0, 2, 0);
+        for run in runs {
+            builder = builder.add_retained_run(*run);
+        }
+        builder.build()
+    };
+
+    let plain = build(&[]);
+    let retained = build(&[RetainedRun::slots(RetainKind::Retain, 0, 1)]);
+    let persistent = build(&[RetainedRun::slots(RetainKind::Persistent, 0, 2)]);
+
+    assert_eq!(plain.compute_layout_hash(), retained.compute_layout_hash());
+    assert_eq!(
+        plain.compute_layout_hash(),
+        persistent.compute_layout_hash()
+    );
+    assert_ne!(plain.retained_runs(), retained.retained_runs());
+    assert_ne!(retained.retained_runs(), persistent.retained_runs());
+}

@@ -8,6 +8,8 @@ use crate::id_types::VarIndex;
 use crate::id_types::{FbTypeId, FunctionId};
 #[cfg(feature = "std")]
 use crate::persistent_extent::PersistentExtent;
+#[cfg(feature = "std")]
+use crate::retained_extent::RetainedRun;
 use crate::ContainerError;
 
 /// Type tags for FB field entries.
@@ -364,6 +366,10 @@ pub struct TypeSection {
     /// [`Container::persistent_extents`](crate::Container::persistent_extents),
     /// which applies that default.
     pub persistent_extents: Vec<PersistentExtent>,
+    /// The retained runs, canonical (format v9). Empty when nothing is
+    /// retained; read through
+    /// [`Container::retained_runs`](crate::Container::retained_runs).
+    pub retained_runs: Vec<RetainedRun>,
 }
 
 #[cfg(feature = "std")]
@@ -388,6 +394,8 @@ impl TypeSection {
         size += 2 + self.fb_field_uids.len() as u32 * FB_FIELD_UID_ENTRY_SIZE as u32;
         // Persistent extents: count(2) + rows * 14
         size += 2 + self.persistent_extents.len() as u32 * PersistentExtent::SIZE as u32;
+        // Retained runs: count(2) + rows * 10
+        size += 2 + self.retained_runs.len() as u32 * RetainedRun::SIZE as u32;
         size
     }
 
@@ -398,7 +406,7 @@ impl TypeSection {
     /// table count (u16 LE), variable entries, stable variable ID count
     /// (u16 LE), stable variable ID entries, FB field UID count (u16 LE),
     /// FB field UID entries, persistent extent count (u16 LE), persistent
-    /// extent rows.
+    /// extent rows, retained run count (u16 LE), retained runs.
     pub fn write_to(&self, w: &mut impl Write) -> Result<(), ContainerError> {
         // FB type descriptors
         w.write_all(&(self.fb_types.len() as u16).to_le_bytes())?;
@@ -449,11 +457,18 @@ impl TypeSection {
             w.write_all(&entry.uid.to_le_bytes())?;
         }
 
-        // Persistent extents (seventh and last sub-table), in the caller's
-        // order.
+        // Persistent extents (seventh sub-table), in the caller's order.
         w.write_all(&(self.persistent_extents.len() as u16).to_le_bytes())?;
         for row in &self.persistent_extents {
             w.write_all(&row.to_bytes())?;
+        }
+
+        // Retained runs (eighth and last sub-table), always written; the
+        // count is 0 when nothing is retained. The builder hands over the
+        // canonical order.
+        w.write_all(&(self.retained_runs.len() as u16).to_le_bytes())?;
+        for run in &self.retained_runs {
+            w.write_all(&run.to_bytes())?;
         }
         Ok(())
     }
@@ -598,7 +613,7 @@ impl TypeSection {
             });
         }
 
-        // Persistent extents (seventh and last sub-table). A type section
+        // Persistent extents (seventh sub-table). A type section
         // that ends before it (a container written before format v8) reads as
         // zero rows.
         let mut buf2 = [0u8; 2];
@@ -615,6 +630,21 @@ impl TypeSection {
             persistent_extents.push(PersistentExtent::from_bytes(&row_buf));
         }
 
+        // Retained runs (eighth and last sub-table). A type section that ends
+        // before it reads as zero runs.
+        let run_count = if r.read_exact(&mut buf2).is_ok() {
+            u16::from_le_bytes(buf2) as usize
+        } else {
+            0
+        };
+
+        let mut retained_runs = Vec::with_capacity(run_count);
+        for _ in 0..run_count {
+            let mut run_buf = [0u8; RetainedRun::SIZE];
+            r.read_exact(&mut run_buf)?;
+            retained_runs.push(RetainedRun::from_bytes(&run_buf)?);
+        }
+
         Ok(TypeSection {
             fb_types,
             array_descriptors,
@@ -623,6 +653,7 @@ impl TypeSection {
             stable_vars,
             fb_field_uids,
             persistent_extents,
+            retained_runs,
         })
     }
 }

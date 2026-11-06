@@ -218,5 +218,6 @@ mod end_to_end_var_temp_function_block;
 mod end_to_end_write_variable_raw;
 mod end_to_end_wstring;
 mod layout_hash;
+mod retained_runs;
 mod stable_var_ids;
 mod wire_format;
