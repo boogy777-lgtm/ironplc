@@ -22,8 +22,9 @@
 //! naming the inactive slot at `seq + 1` and fsync — *before* the slot swap,
 //! so a crash never leaves new bytes in a slot that no marker residue names
 //! (the crash table's during-4/5 rows resolve by `seq`); delete the inactive
-//! slot if present (`std::fs::rename` never overwrites on Windows; the
-//! marker-named slot is never the delete target); rename the tmp into the
+//! slot if present (a step kept from when the store assumed `std::fs::rename`
+//! does not replace a file on Windows; it does, and the delete is harmless
+//! because the marker-named slot is never the delete target); rename the tmp into the
 //! inactive slot; delete the old marker; rename `marker.tmp` into the marker
 //! (same delete-before-rename constraint).
 //!
@@ -220,8 +221,9 @@ impl SlotStore {
         // new bytes from the old ones by seq.
         self.write_fsync(&self.marker_tmp, &marker_json(&next))?;
 
-        // rename never overwrites on Windows: delete the inactive slot
-        // first. The marker-named slot is never the delete target.
+        // Delete the inactive slot first (kept from when the store assumed
+        // rename does not replace on Windows; it does). The marker-named slot
+        // is never the delete target, so the delete is harmless.
         self.delete_if_present(&self.slot_path(next.slot))?;
         fs::rename(&self.tmp, self.slot_path(next.slot)).map_err(|err| {
             persist_error(format!(

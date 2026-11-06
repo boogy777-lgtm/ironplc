@@ -46,13 +46,17 @@ pub fn write_synced(path: &Path, bytes: &[u8]) -> io::Result<()> {
 /// `std::fs::rename` replaces an existing file at `path` on every supported
 /// platform, Windows included, so no delete-before-rename step is needed.
 ///
-/// The error returned is the one that made the replace fail. Removing the
-/// temporary after that failure can only fail for a reason the same failure
-/// already reports, so a removal error is dropped.
+/// The error returned is the one that made the replace fail. If removing the
+/// temporary after that failure fails too, the temporary is left behind and a
+/// warning names it, so the residue is never silent.
 pub fn replace_file(path: &Path, temporary: &Path, bytes: &[u8]) -> io::Result<()> {
     let replaced = write_synced(temporary, bytes).and_then(|()| fs::rename(temporary, path));
     if replaced.is_err() {
-        drop(fs::remove_file(temporary));
+        match fs::remove_file(temporary) {
+            Ok(()) => {}
+            Err(err) if err.kind() == io::ErrorKind::NotFound => {}
+            Err(err) => log::warn!("unable to remove {}: {err}", temporary.display()),
+        }
     }
     replaced
 }
