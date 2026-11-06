@@ -35,7 +35,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use ironplc_cli_support::durable_file;
-use ironplc_runtime::{DeviceIdentity, FaultNote};
+use ironplc_runtime::{DeviceIdentity, FaultNote, RunState, RuntimeHost};
 
 use super::{os_random, DeviceSetting, DeviceSettings, Entries, Random, SettingsError};
 use crate::error::{self, VmError};
@@ -72,6 +72,10 @@ pub(crate) struct Device {
     /// The trap that stopped the scan, while it has; the device is faulted
     /// exactly then. Not kept across a restart: a restart is the way out.
     fault: Option<FaultNote>,
+    /// Whether the operator has the device executing rounds. Apart from the
+    /// fault: a trap stops the scan by itself and leaves this as it was. Not
+    /// kept across a restart; the device boots running.
+    run_state: RunState,
 }
 
 /// What the device keeps across a restart besides its settings, and the facts
@@ -137,6 +141,7 @@ impl Device {
                 persisted_content_hash: None,
             },
             fault: None,
+            run_state: RunState::Running,
         })
     }
 
@@ -161,6 +166,7 @@ impl Device {
                 persisted_content_hash: None,
             },
             fault: None,
+            run_state: RunState::Running,
         }
     }
 
@@ -183,9 +189,45 @@ impl Device {
         self.fault.get_or_insert(fault);
     }
 
-    /// The fault that stopped the scan, if the device is faulted.
-    pub(crate) fn fault(&self) -> Option<&FaultNote> {
-        self.fault.as_ref()
+    /// Whether the device executes rounds: running by command and not
+    /// faulted. The device loop asks this, with the execution permit of the
+    /// host, before every round.
+    pub(crate) fn scans(&self) -> bool {
+        self.run_state == RunState::Running && self.fault.is_none()
+    }
+
+    /// `startScan`: the device executes rounds again. Starting a running device
+    /// changes nothing. V6019 while the device is faulted: the trap is not
+    /// cleared by a start, and a start that did nothing would be an
+    /// acknowledgment that lies; the device is restarted to clear the fault.
+    pub(crate) fn start_scan(&mut self) -> Result<RunState, VmError> {
+        if let Some(fault) = &self.fault {
+            return Err(VmError::io(
+                error::DEVICE_FAULTED,
+                format!(
+                    "the device is faulted ({} at task {}, instance {}) and cannot be started;                      restart the device to clear the fault",
+                    fault.v_code, fault.task_id, fault.instance_id
+                ),
+            ));
+        }
+        self.run_state = RunState::Running;
+        Ok(self.run_state)
+    }
+
+    /// `stopScan`: the device executes no round until it is started. The
+    /// command executes between rounds, so the round that was running has
+    /// finished. A device that was running writes the retained values, as at
+    /// the stop of the process: they do not change while it is stopped, and a
+    /// power cut then loses nothing (V6018 when the write fails; the device is
+    /// stopped all the same). Stopping a stopped device changes and writes
+    /// nothing. A faulted device can be stopped; its fault stays.
+    pub(crate) fn stop_scan(&mut self, host: &RuntimeHost) -> Result<RunState, VmError> {
+        if self.run_state == RunState::Stopped {
+            return Ok(self.run_state);
+        }
+        self.run_state = RunState::Stopped;
+        self.stopped(host)?;
+        Ok(self.run_state)
     }
 
     /// A handle that reads the identity of this device from other threads.

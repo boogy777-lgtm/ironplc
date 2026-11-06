@@ -17,3 +17,4 @@ V6015,DeviceSettingsInvalid,The device settings are not valid
 V6016,DeviceSettingsWrite,Unable to write the device settings file
 V6017,DiscoveryBind,Unable to bind the discovery port
 V6018,RetainedWrite,Unable to write the retained file
+V6019,DeviceFaulted,The device is faulted and cannot be started

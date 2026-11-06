@@ -171,3 +171,35 @@ fn serve_when_settings_file_has_a_bad_id_then_exit_2_v6015_naming_the_field() {
     assert!(stderr.contains("V6015"), "{stderr}");
     assert!(stderr.contains("\"deviceId\""), "{stderr}");
 }
+
+/// REQ-VC-vm-cli-046: the scan control over a real session: the device boots
+/// running, a stop and a start answer the state they leave, and `identity`
+/// reports it. The device does not keep the state across a restart.
+#[spec_test(REQ_VC_vm_cli_046)]
+#[test]
+fn serve_when_stopped_and_started_through_the_session_then_the_run_state_is_reported() {
+    let dir = TempDir::new().unwrap();
+    let stdin = format!(
+        "{IDENTITY}{}{IDENTITY}{}{IDENTITY}",
+        "{\"command\":\"stopScan\"}\n", "{\"command\":\"startScan\"}\n"
+    );
+
+    let (output, lines) = serve_lines(&served(&dir), &stdin);
+    let (_, restarted) = serve_lines(
+        &served(&dir),
+        &format!("{{\"command\":\"stopScan\"}}\n{IDENTITY}"),
+    );
+    let (_, rebooted) = serve_lines(&served(&dir), IDENTITY);
+
+    assert!(output.status.success());
+    assert_eq!(lines[0]["runState"], "running");
+    assert_eq!(
+        lines[1],
+        serde_json::json!({"response": "runState", "runState": "stopped"})
+    );
+    assert_eq!(lines[2]["runState"], "stopped");
+    assert_eq!(lines[3]["runState"], "running");
+    assert_eq!(lines[4]["runState"], "running");
+    assert_eq!(restarted[1]["runState"], "stopped");
+    assert_eq!(rebooted[0]["runState"], "running");
+}
