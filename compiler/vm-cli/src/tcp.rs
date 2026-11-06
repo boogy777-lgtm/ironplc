@@ -359,6 +359,9 @@ fn accept_sessions(
 }
 
 #[cfg(test)]
+mod session_tests;
+
+#[cfg(test)]
 mod tests {
     use std::io::Write;
 
@@ -449,6 +452,7 @@ mod tests {
         device_loop::channel().0
     }
 
+    #[spec_test(REQ_VC_vm_cli_055)]
     #[test]
     fn serve_accepted_when_the_session_panics_then_the_claim_is_free_before_the_socket_closes() {
         let (server, peer, mut client) = connected();
@@ -474,6 +478,7 @@ mod tests {
         assert!(session.join().is_err());
     }
 
+    #[spec_test(REQ_VC_vm_cli_055)]
     #[test]
     fn serve_accepted_when_the_session_ends_then_the_claim_is_free_before_the_socket_closes() {
         let (server, peer, mut client) = connected();
