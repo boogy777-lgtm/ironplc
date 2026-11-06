@@ -9,8 +9,8 @@ use ironplc_runtime::RuntimeHost;
 use spec_test_macro::spec_test;
 use tempfile::TempDir;
 
+use crate::device_loop::scripted::serve_session;
 use crate::device_settings::device::{Device, TEST_DEVICE_ID};
-use crate::serve::serve_session;
 use crate::serve_tests::{container_bytes, counter_host, counter_source};
 
 /// Runs `lines` through one session over `device`, returning the parsed

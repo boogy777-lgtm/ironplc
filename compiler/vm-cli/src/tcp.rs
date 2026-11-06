@@ -1,7 +1,7 @@
 //! The TCP transport of the engineering connection (ADR-0063): the same
-//! `serve_session` loop as stdio, one message per
-//! 4-byte-little-endian-length-prefixed frame instead of one message per
-//! newline-delimited line. The frame replaces only the delimiter; the JSON
+//! session as stdio, relayed to the device loop ([`crate::device_loop`]), one
+//! message per 4-byte-little-endian-length-prefixed frame instead of one
+//! message per newline-delimited line. The frame replaces only the delimiter; the JSON
 //! inside is byte-identical on both transports. The frame and the timeouts are
 //! defined once, in `ironplc_runtime::frame`, which a client reads too.
 //!
@@ -26,18 +26,19 @@ use std::io::{self, Read};
 use std::net::{IpAddr, Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc, Arc};
 
-use ironplc_redundancy::Shell;
 use ironplc_runtime::frame::{
     is_framing_error, write_frame, FrameReader, FrameWriter, CLOSE_LINGER, RESPONSE_TIMEOUT,
 };
-use ironplc_runtime::{RuntimeHost, DEFAULT_SESSION_PORT};
+use ironplc_runtime::DEFAULT_SESSION_PORT;
 
+use crate::device_loop::{self, relay_session, DeviceLoop, LoopHandle};
 use crate::device_settings::device::Device;
 use crate::discovery::{self, Discovery};
 use crate::error::{self, VmError};
-use crate::serve::{compose_host, serve_session};
+use crate::pacer::Pacer;
+use crate::serve::compose_host;
 use crate::slot_store::SlotStore;
 
 /// The one-line refusal a second connection receives (V6014): it names the
@@ -123,44 +124,26 @@ fn refuse(mut stream: TcpStream, peer: SocketAddr) {
     close_gracefully(&mut stream);
 }
 
-/// Serves one TCP session: the stdio session loop over the framed transport,
-/// with the per-message read timeout the timeout policy sets. `stream` stays
-/// with the caller so a failed session can still receive its V6013 line.
-fn serve_connection(
-    host: &mut RuntimeHost,
-    shell: &mut Shell,
-    device: &mut Device,
-    store: &mut SlotStore,
-    stream: &mut TcpStream,
-) -> io::Result<()> {
+/// Serves one TCP session: the stdio session over the framed transport,
+/// relayed to the device loop, with the per-message read timeout the timeout
+/// policy sets. `stream` stays with the caller so a failed session can still
+/// receive its V6013 line.
+fn serve_connection(handle: &LoopHandle, stream: &mut TcpStream) -> io::Result<()> {
     stream.set_read_timeout(Some(RESPONSE_TIMEOUT))?;
     let reader = FrameReader::new(stream.try_clone()?);
     let writer = FrameWriter::new(stream.try_clone()?);
-    serve_session(host, reader, writer, Some(store), device, Some(shell))
+    relay_session(handle, reader, writer)
 }
 
 /// Serves one accepted connection to its end, then releases the occupied
 /// flag whatever the outcome — a lost session must never wedge the listener.
 fn serve_accepted(
     occupied: Arc<AtomicBool>,
-    host: Arc<Mutex<RuntimeHost>>,
-    shell: Arc<Mutex<Shell>>,
-    device: Arc<Mutex<Device>>,
-    store: Arc<Mutex<SlotStore>>,
+    handle: LoopHandle,
     mut stream: TcpStream,
     peer: SocketAddr,
 ) {
-    let result = {
-        // The occupied flag admits one session thread at a time, so the
-        // locks are never contended; a poisoned lock (a panicked sibling)
-        // must not wedge the device either, so it is recovered like the
-        // MCP session's mutex (`mcp/src/tools/hot_edit.rs`).
-        let mut host = host.lock().unwrap_or_else(|err| err.into_inner());
-        let mut shell = shell.lock().unwrap_or_else(|err| err.into_inner());
-        let mut store = store.lock().unwrap_or_else(|err| err.into_inner());
-        let mut device = device.lock().unwrap_or_else(|err| err.into_inner());
-        serve_connection(&mut host, &mut shell, &mut device, &mut store, &mut stream)
-    };
+    let result = serve_connection(&handle, &mut stream);
     let mut framing_answered = false;
     match result {
         Ok(()) => log::info!("session with {peer} ended"),
@@ -208,17 +191,22 @@ pub(crate) fn parse_listen_address(text: &str) -> Result<SocketAddr, String> {
 }
 
 /// Boots the committed artifact and serves the hot-edit session on `addr`:
-/// one listener, one session at a time. The accept loop is the
-/// single-session authority (ADR-0065): it stays responsive while a session
-/// thread runs, and claims the occupied flag for the accepted socket — a
-/// claimed device refuses every further connection with one V6014 line.
-/// Connection-level failures — a framing violation, an idle client, a reset
-/// peer — never end the listener; only an accept error or a store/boot
-/// failure ends `serve` with the usual V-code.
+/// one listener, one session at a time, while the device loop scans. The
+/// accept loop (its own thread) is the single-session authority (ADR-0065):
+/// it stays responsive while a session thread runs, and claims the occupied
+/// flag for the accepted socket — a claimed device refuses every further
+/// connection with one V6014 line. Connection-level failures — a framing
+/// violation, an idle client, a reset peer — never end the listener; only an
+/// accept error or a store/boot failure ends `serve` with the usual V-code.
 ///
-/// The HA shell is composed exactly like the stdio session — standalone by
-/// default, the simulated pair under `ha_simulated_peer` — and lives as
-/// long as the host: sequential sessions resume the same pair state.
+/// The device loop runs on the calling thread and owns the host, the HA shell,
+/// the device and the slot store; the session threads relay their lines to it
+/// (ADR-0086). The shell is composed exactly like the stdio session —
+/// standalone by default, the simulated pair under `ha_simulated_peer` — and
+/// lives as long as the host: sequential sessions resume the same pair state.
+///
+/// Ctrl+C is the controlled stop of the process: the loop ends, and the device
+/// writes the retained values before `serve` returns.
 ///
 /// With `discovery` on, the device also answers discovery on UDP at the
 /// address and port the listener actually has (the same number as the session,
@@ -255,11 +243,49 @@ pub(crate) fn serve_tcp(
         log::info!("answering discovery on {session_addr} (UDP)");
     }
 
+    let stop = crate::cli::stop_on_ctrl_c()?;
+    let (handle, commands) = device_loop::channel();
+    let (failed, failures) = mpsc::channel::<VmError>();
+    let acceptor_stop = Arc::clone(&stop);
+    std::thread::Builder::new()
+        .name("serve-accept".to_string())
+        .spawn(move || {
+            if let Err(err) = accept_sessions(&listener, &handle) {
+                // The listener is gone: the device stops in order.
+                if failed.send(err).is_err() {
+                    log::error!("the listener failed after the device had stopped");
+                }
+                acceptor_stop.store(true, Ordering::Relaxed);
+            }
+        })
+        .map_err(|err| {
+            VmError::io(
+                error::SESSION_IO,
+                format!("unable to spawn the accept thread: {err}"),
+            )
+        })?;
+
+    let mut device_loop = DeviceLoop::new(
+        host,
+        Some(store),
+        device,
+        shell,
+        Pacer::start(stop, None),
+        commands,
+    );
+    device_loop.run();
+    let outcome = match failures.try_recv() {
+        Ok(err) => Err(err),
+        Err(_) => Ok(()),
+    };
+    device_loop.stop(outcome)
+}
+
+/// The accept loop: one session thread per accepted connection, the occupied
+/// flag as the single-session claim. Returns only with the error that ends
+/// the listener.
+fn accept_sessions(listener: &TcpListener, handle: &LoopHandle) -> Result<(), VmError> {
     let occupied = Arc::new(AtomicBool::new(false));
-    let host = Arc::new(Mutex::new(host));
-    let shell = Arc::new(Mutex::new(shell));
-    let device = Arc::new(Mutex::new(device));
-    let store = Arc::new(Mutex::new(store));
     loop {
         let (stream, peer) = listener.accept().map_err(|err| {
             VmError::io(
@@ -281,23 +307,10 @@ pub(crate) fn serve_tcp(
             continue;
         }
         let session_occupied = Arc::clone(&occupied);
-        let session_host = Arc::clone(&host);
-        let session_shell = Arc::clone(&shell);
-        let session_device = Arc::clone(&device);
-        let session_store = Arc::clone(&store);
+        let session_handle = handle.clone();
         std::thread::Builder::new()
             .name(format!("serve-session-{peer}"))
-            .spawn(move || {
-                serve_accepted(
-                    session_occupied,
-                    session_host,
-                    session_shell,
-                    session_device,
-                    session_store,
-                    stream,
-                    peer,
-                );
-            })
+            .spawn(move || serve_accepted(session_occupied, session_handle, stream, peer))
             .map_err(|err| {
                 occupied.store(false, Ordering::SeqCst);
                 VmError::io(

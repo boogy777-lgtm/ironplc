@@ -4,8 +4,8 @@
 //! The retained image is written at three points, all through
 //! [`RetainedStore`]:
 //!
-//! - a controlled stop ([`Device::stopped`]): the device that ends its session
-//!   at the end of its input;
+//! - a controlled stop ([`Device::stopped`]): the device loop ends at the end of
+//!   its input or at Ctrl+C, on stdio and on TCP;
 //! - `assembleEdits` ([`Device::assembled`]): the image of the application that
 //!   was just committed, tagged with its content hash;
 //! - a scan boundary, when the `retainedSavePeriod` setting is on
@@ -65,8 +65,10 @@ impl Device {
     /// failure is logged with its code and the device goes on; the next period
     /// tries again.
     pub(crate) fn scan_boundary(&mut self, host: &RuntimeHost) {
+        // The device loop calls this at every round: the common case (the
+        // period is off) must cost no more than reading the setting.
         let period = self.retained_save_period();
-        if !self.runs_persisted_application(host) {
+        if period == 0 || !self.runs_persisted_application(host) {
             return;
         }
         if let Some(store) = &mut self.kept.retained {
@@ -76,11 +78,14 @@ impl Device {
         }
     }
 
-    /// Fills the facts of the device's storage into an `identity` answer: the
-    /// one place they are put into the payload, for every transport.
+    /// Fills the facts of the device that the runtime layer cannot know into an
+    /// `identity` answer: what it stores and what it did with it at boot, and
+    /// the fault of its scan. The one place they are put into the payload, for
+    /// every transport.
     pub(crate) fn complete_identity(&self, payload: &mut IdentityPayload) {
         payload.persisted_content_hash = self.kept.persisted_content_hash.clone();
         payload.retained = self.kept.retained_boot.map(BootResult::note);
+        payload.fault = self.fault.clone();
     }
 
     /// Whether the application `host` runs is the one the device would boot.

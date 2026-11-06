@@ -159,3 +159,45 @@ fn serve_tcp_when_scripted_then_identity_refusal_framing_drop_and_reconnect(
 
     Ok(())
 }
+
+/// REQ-VC-vm-cli-042, REQ-VC-vm-cli-043: over TCP the scan runs between the
+/// frames of a session, and a session that has ended leaves the loop scanning
+/// for the next one (the rounds counter keeps advancing across the reconnect).
+/// The test asserts that it advanced, never by how much.
+#[spec_test(REQ_VC_vm_cli_042)]
+#[spec_test(REQ_VC_vm_cli_043)]
+#[test]
+fn serve_tcp_when_idle_between_frames_and_between_sessions_then_the_scan_keeps_running(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = TempDir::new()?;
+    let container_path = dir.path().join("counter.iplc");
+    write_compiled_container(&container_path, COUNTER_PROGRAM);
+    let probe = TcpListener::bind("127.0.0.1:0")?;
+    let addr = probe.local_addr()?;
+    drop(probe);
+    let mut server = Command::new(cargo::cargo_bin!("ironplcvm"))
+        .arg("serve")
+        .arg("--listen")
+        .arg(addr.to_string())
+        .arg(&container_path)
+        .spawn()?;
+    let rounds = |client: &mut TcpStream| -> Result<u64, Box<dyn std::error::Error>> {
+        client.write_all(&tcp_frame(r#"{"command":"getStatus"}"#))?;
+        let status: serde_json::Value = serde_json::from_str(&read_frame(client)?)?;
+        Ok(status["rounds"].as_u64().unwrap())
+    };
+
+    let mut client = connect_frame_client(addr)?;
+    let first = rounds(&mut client)?;
+    std::thread::sleep(Duration::from_millis(300));
+    let second = rounds(&mut client)?;
+    drop(client);
+    std::thread::sleep(Duration::from_millis(300));
+    let mut again = connect_frame_client(addr)?;
+    let third = rounds(&mut again)?;
+
+    server.kill()?;
+    assert!(second > first, "{first} then {second}");
+    assert!(third > second, "{second} then {third}");
+    Ok(())
+}

@@ -38,6 +38,21 @@ pub(crate) fn load_container(path: &Path) -> Result<Container, VmError> {
     })
 }
 
+/// Installs the Ctrl+C handler of a process that runs until it is stopped
+/// (`run`, `serve`) and returns the flag it sets, which the pacer reads: the
+/// controlled stop. Installed once per process.
+pub(crate) fn stop_on_ctrl_c() -> Result<Arc<AtomicBool>, VmError> {
+    let stop_flag = Arc::new(AtomicBool::new(false));
+    let handle = stop_flag.clone();
+    ctrlc::set_handler(move || handle.store(true, Ordering::Relaxed)).map_err(|e| {
+        VmError::io(
+            error::SIGNAL_HANDLER,
+            format!("Failed to set signal handler: {e}"),
+        )
+    })?;
+    Ok(stop_flag)
+}
+
 /// Loads a container file and executes it.
 ///
 /// When `scans` is `Some(n)`, runs exactly `n` scheduling rounds.
@@ -55,17 +70,7 @@ pub fn run(path: &Path, dump_vars: Option<&Path>, scans: Option<u64>) -> Result<
         .start()
         .map_err(|ctx| VmError::from_trap(&ctx.trap, ctx.task_id, ctx.instance_id))?;
 
-    // Install signal handler for clean shutdown
-    let stop_flag = Arc::new(AtomicBool::new(false));
-    let handle = stop_flag.clone();
-    ctrlc::set_handler(move || handle.store(true, Ordering::Relaxed)).map_err(|e| {
-        VmError::io(
-            error::SIGNAL_HANDLER,
-            format!("Failed to set signal handler: {e}"),
-        )
-    })?;
-
-    let mut pacer = Pacer::start(stop_flag, scans);
+    let mut pacer = Pacer::start(stop_on_ctrl_c()?, scans);
     let mut rounds = 0u64;
     loop {
         if pacer.should_stop(rounds) {

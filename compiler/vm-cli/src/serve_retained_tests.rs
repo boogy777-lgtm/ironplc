@@ -19,9 +19,10 @@ use rstest::rstest;
 use spec_test_macro::spec_test;
 use tempfile::TempDir;
 
+use crate::device_loop::scripted::serve_session;
 use crate::device_settings::device::Device;
 use crate::error;
-use crate::serve::{compose_host, serve_session, stop_device};
+use crate::serve::{compose_host, stop_device};
 use crate::serve_tests::{compile_container, container_bytes};
 use crate::slot_store::{suffix, SlotStore};
 

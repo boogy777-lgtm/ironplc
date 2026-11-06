@@ -35,7 +35,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use ironplc_cli_support::durable_file;
-use ironplc_runtime::DeviceIdentity;
+use ironplc_runtime::{DeviceIdentity, FaultNote};
 
 use super::{os_random, DeviceSetting, DeviceSettings, Entries, Random, SettingsError};
 use crate::error::{self, VmError};
@@ -69,6 +69,9 @@ pub(crate) struct Device {
     /// The other things the device keeps beside the application, and what it
     /// did with them at boot; see [`keeps`].
     kept: Kept,
+    /// The trap that stopped the scan, while it has; the device is faulted
+    /// exactly then. Not kept across a restart: a restart is the way out.
+    fault: Option<FaultNote>,
 }
 
 /// What the device keeps across a restart besides its settings, and the facts
@@ -133,6 +136,7 @@ impl Device {
                 retained_boot: None,
                 persisted_content_hash: None,
             },
+            fault: None,
         })
     }
 
@@ -156,6 +160,7 @@ impl Device {
                 retained_boot: None,
                 persisted_content_hash: None,
             },
+            fault: None,
         }
     }
 
@@ -169,6 +174,18 @@ impl Device {
     /// seconds; 0 is off. See [`DeviceSettings::retained_save_period`].
     pub(crate) fn retained_save_period(&self) -> u64 {
         lock(&self.settings).retained_save_period()
+    }
+
+    /// The device is faulted: a scan round trapped. It scans no more, and
+    /// `identity` reports `fault` until the process restarts. The first fault
+    /// stays; a device that cannot scan has no second one.
+    pub(crate) fn note_fault(&mut self, fault: FaultNote) {
+        self.fault.get_or_insert(fault);
+    }
+
+    /// The fault that stopped the scan, if the device is faulted.
+    pub(crate) fn fault(&self) -> Option<&FaultNote> {
+        self.fault.as_ref()
     }
 
     /// A handle that reads the identity of this device from other threads.

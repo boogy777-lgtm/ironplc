@@ -99,31 +99,42 @@ the device settings; session threads send it a command line with a reply channel
    and keeps calling `wait_for` (owner answer 3 of the online-model plan): only
    the pacer is shared. The loop reads the clock once per iteration and uses
    that time both for the due check and as the uptime of the round, as `run` does.
-6. **A trap is a fault.** A round that traps stops the scan. The loop records the
+6. **The deadlines survive a round.** `RuntimeHost::run` loads the VM for each
+   call, and a load starts every task ready (`Vm::load` resets the task states),
+   which is what a driven round at a constant clock needs and what a paced
+   driver cannot have: a cyclic task would run in every round it is asked for,
+   count a spurious overrun, and drift by the wake-up latency of each period. The
+   host therefore gets `run_paced_round`, one round at a given uptime on
+   `Vm::load_continuing`, which leaves the task states as the previous round set
+   them, and `next_due_us`, the deadline a paced driver waits for (shared with
+   the running VM through `earliest_due_us`). `run` keeps its behaviour. A swap
+   still rebuilds the task state, so the tasks of the swapped-in artifact run in
+   the round that applies it.
+7. **A trap is a fault.** A round that traps stops the scan. The loop records the
    fault (the V-code, the message, the task and the instance), runs no further
    round, and keeps answering every command. The fault is reported in the
    `identity` answer as the optional field `fault`; the protocol version stays 2.
    A swap request on a faulted device still reaches its boundary (the host
    applies it without scanning), so `ack` still means applied. A fault is left by
    a restart of the process; Run and Stop (stage 3c) own any other way out.
-7. **A controlled stop for the process.** Ctrl+C sets the stop flag of the pacer
+8. **A controlled stop for the process.** Ctrl+C sets the stop flag of the pacer
    (the `ctrlc` handler that `run` installs); the loop ends and the device writes
    the retained values (`stop_device`). The end of stdin ends the loop the same
    way. TCP had no controlled stop: ending the process did not write the retained
    values. It has one now, and REQ-VC-vm-cli-038 no longer carves it out.
-8. **Exclusivity is unchanged.** The accept loop of `serve_tcp` still claims the
+9. **Exclusivity is unchanged.** The accept loop of `serve_tcp` still claims the
    occupied flag, still refuses a second connection with V6014, and still closes
    gracefully (ADR-0065). It moves to its own thread, because the main thread now
    runs the loop. What changes is only what a session thread does: it relays
    lines to the loop instead of locking four mutexes.
-9. **Tests decide when rounds run.** The loop is split into `Core`, which holds
-   the four owned things by reference and has no clock (execute a line, run a
-   boundary round at a given uptime, finish a command), and `DeviceLoop`, which
-   adds the channel and the pacer. The scripted session of the tests drives
-   `Core` the way the old session loop did (a round after each swap request, at
-   a constant zero uptime), so the existing command tests assert the same
-   counters on the same code the loop runs. The loop tests drive `DeviceLoop` one
-   `step` at a time on a fake clock.
+10. **Tests decide when rounds run.** The loop is split into `Core`, which holds
+    the four owned things by reference and has no clock (execute a line, run a
+    boundary round at a given uptime, finish a command), and `DeviceLoop`, which
+    adds the channel and the pacer. The scripted session of the tests drives
+    `Core` the way the old session loop did (a round after each swap request, at
+    a constant zero uptime), so the existing command tests assert the same
+    counters on the same code the loop runs. The loop tests drive `DeviceLoop` one
+    `step` at a time on a fake clock.
 
 Not part of this decision: the HA pair path (`serve_pair`, `ha_pair.rs`) keeps its
 own pump and keeps `drive_scan_round`, now documented as the path of the pair

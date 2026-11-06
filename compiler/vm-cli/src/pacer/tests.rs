@@ -1,39 +1,9 @@
 //! Tests of the pacing policy on a fake clock.
 
-use std::cell::{Cell, RefCell};
-use std::rc::Rc;
+use std::sync::mpsc;
 
+use super::test_clock::{drive, FakeClock};
 use super::*;
-
-/// A clock that only moves when told to or when asked to sleep, and records
-/// the deadlines it was asked to sleep until. Clones share the state, so a
-/// test keeps one after the pacer takes the other.
-#[derive(Clone, Default)]
-struct FakeClock {
-    now_us: Rc<Cell<u64>>,
-    sleeps: Rc<RefCell<Vec<u64>>>,
-}
-
-impl FakeClock {
-    fn advance(&self, us: u64) {
-        self.now_us.set(self.now_us.get() + us);
-    }
-
-    fn sleeps(&self) -> Vec<u64> {
-        self.sleeps.borrow().clone()
-    }
-}
-
-impl Clock for FakeClock {
-    fn uptime_us(&self) -> u64 {
-        self.now_us.get()
-    }
-
-    fn sleep_until_us(&mut self, target_us: u64) {
-        self.sleeps.borrow_mut().push(target_us);
-        self.now_us.set(self.now_us.get().max(target_us));
-    }
-}
 
 fn pacer(clock: &FakeClock, max_rounds: Option<u64>) -> (Pacer<FakeClock>, Arc<AtomicBool>) {
     let stop = Arc::new(AtomicBool::new(false));
@@ -41,26 +11,6 @@ fn pacer(clock: &FakeClock, max_rounds: Option<u64>) -> (Pacer<FakeClock>, Arc<A
         Pacer::with_clock(clock.clone(), stop.clone(), max_rounds),
         stop,
     )
-}
-
-/// Drives the pacer the way `run` does: stop check, round at the pacer's
-/// uptime, count, wait for the deadline `next_due_us` gives after that round.
-/// Returns the uptime each round saw.
-fn drive(
-    pacer: &mut Pacer<FakeClock>,
-    clock: &FakeClock,
-    round_cost_us: u64,
-    next_due_us: impl Fn(u64) -> Option<u64>,
-) -> Vec<u64> {
-    let mut round_times = Vec::new();
-    let mut rounds = 0u64;
-    while !pacer.should_stop(rounds) {
-        round_times.push(pacer.uptime_us());
-        clock.advance(round_cost_us);
-        rounds += 1;
-        pacer.wait_for(next_due_us(rounds));
-    }
-    round_times
 }
 
 #[test]
@@ -182,4 +132,135 @@ fn drive_when_freewheeling_then_rounds_run_back_to_back_without_sleep() {
 
     assert_eq!(round_times, vec![0, 100, 200]);
     assert!(clock.sleeps().is_empty());
+}
+
+#[test]
+fn is_due_when_no_deadline_then_always() {
+    assert!(is_due(0, None));
+}
+
+#[test]
+fn is_due_when_deadline_reached_then_true_and_before_then_false() {
+    assert!(!is_due(999, Some(1_000)));
+    assert!(is_due(1_000, Some(1_000)));
+    assert!(is_due(1_001, Some(1_000)));
+}
+
+#[test]
+fn wait_for_message_when_no_message_then_waits_for_the_deadline() {
+    let clock = FakeClock::default();
+    let (mut pacer, _) = pacer(&clock, None);
+    let (_tx, rx) = mpsc::channel::<u8>();
+
+    let result = pacer.wait_for_message(Some(1_000), &rx);
+
+    assert_eq!(result, Err(RecvTimeoutError::Timeout));
+    assert_eq!(clock.now_us(), 1_000);
+}
+
+#[test]
+fn wait_for_message_when_message_waiting_then_returns_it_before_the_deadline() {
+    let clock = FakeClock::default();
+    let (mut pacer, _) = pacer(&clock, None);
+    let (tx, rx) = mpsc::channel();
+    tx.send(7u8).unwrap();
+
+    let result = pacer.wait_for_message(Some(1_000), &rx);
+
+    assert_eq!(result, Ok(7));
+    assert_eq!(clock.now_us(), 0);
+}
+
+#[test]
+fn wait_for_message_when_deadline_is_far_then_wait_ends_at_the_stop_poll() {
+    let clock = FakeClock::default();
+    let (mut pacer, _) = pacer(&clock, None);
+    let (_tx, rx) = mpsc::channel::<u8>();
+
+    let result = pacer.wait_for_message(Some(10_000_000), &rx);
+
+    assert_eq!(result, Err(RecvTimeoutError::Timeout));
+    assert_eq!(clock.now_us(), STOP_POLL_US);
+}
+
+#[test]
+fn wait_for_message_when_no_deadline_then_does_not_wait() {
+    let clock = FakeClock::default();
+    let (mut pacer, _) = pacer(&clock, None);
+    let (_tx, rx) = mpsc::channel::<u8>();
+
+    let result = pacer.wait_for_message(None, &rx);
+
+    assert_eq!(result, Err(RecvTimeoutError::Timeout));
+    assert_eq!(clock.now_us(), 0);
+    assert!(clock.waits().is_empty());
+}
+
+#[test]
+fn wait_for_message_when_no_deadline_and_message_waiting_then_returns_it() {
+    let clock = FakeClock::default();
+    let (mut pacer, _) = pacer(&clock, None);
+    let (tx, rx) = mpsc::channel();
+    tx.send(7u8).unwrap();
+
+    assert_eq!(pacer.wait_for_message(None, &rx), Ok(7));
+}
+
+#[test]
+fn wait_for_message_when_deadline_passed_then_does_not_wait() {
+    let clock = FakeClock::default();
+    let (mut pacer, _) = pacer(&clock, None);
+    let (_tx, rx) = mpsc::channel::<u8>();
+    clock.advance(2_000);
+
+    let result = pacer.wait_for_message(Some(1_000), &rx);
+
+    assert_eq!(result, Err(RecvTimeoutError::Timeout));
+    assert_eq!(clock.now_us(), 2_000);
+}
+
+#[test]
+fn wait_for_message_when_senders_gone_then_disconnected() {
+    let clock = FakeClock::default();
+    let (mut pacer, _) = pacer(&clock, None);
+    let (tx, rx) = mpsc::channel::<u8>();
+    drop(tx);
+
+    assert_eq!(
+        pacer.wait_for_message(Some(1_000), &rx),
+        Err(RecvTimeoutError::Disconnected)
+    );
+    assert_eq!(
+        pacer.wait_for_message(None, &rx),
+        Err(RecvTimeoutError::Disconnected)
+    );
+}
+
+#[test]
+fn wait_idle_when_no_message_then_waits_one_stop_poll() {
+    let clock = FakeClock::default();
+    let (mut pacer, _) = pacer(&clock, None);
+    let (_tx, rx) = mpsc::channel::<u8>();
+
+    let result = pacer.wait_idle(&rx);
+
+    assert_eq!(result, Err(RecvTimeoutError::Timeout));
+    assert_eq!(clock.now_us(), STOP_POLL_US);
+}
+
+#[test]
+fn recv_until_us_when_system_clock_and_message_sent_then_returns_it() {
+    let mut clock = SystemClock::start();
+    let (tx, rx) = mpsc::channel();
+    tx.send(5u8).unwrap();
+
+    assert_eq!(clock.recv_until_us(10_000_000, &rx), Ok(5));
+}
+
+#[test]
+fn recv_until_us_when_system_clock_and_target_passed_then_times_out_without_waiting() {
+    let mut clock = SystemClock::start();
+    let (_tx, rx) = mpsc::channel::<u8>();
+
+    assert_eq!(clock.recv_until_us(0, &rx), Err(RecvTimeoutError::Timeout));
 }

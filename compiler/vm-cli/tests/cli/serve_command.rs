@@ -88,3 +88,46 @@ END_PROGRAM
 
     Ok(())
 }
+
+/// REQ-VC-vm-cli-042: `serve` runs the scan by itself, not only when a command
+/// asks for a round: the rounds counter that `getStatus` reports advances while
+/// no command is sent. The test asserts the state (it advanced), not a count,
+/// because the number of rounds between two commands depends on timing.
+#[spec_test(REQ_VC_vm_cli_042)]
+#[test]
+fn serve_when_idle_between_commands_then_the_scan_keeps_running(
+) -> Result<(), Box<dyn std::error::Error>> {
+    use std::io::{BufRead, BufReader, Write};
+    use std::process::Stdio;
+    use std::time::Duration;
+
+    let dir = TempDir::new()?;
+    let container_path = dir.path().join("counter.iplc");
+    write_compiled_container(&container_path, crate::COUNTER_PROGRAM);
+    let mut child = std::process::Command::new(cargo::cargo_bin!("ironplcvm"))
+        .arg("serve")
+        .arg(&container_path)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    let mut stdout = BufReader::new(child.stdout.take().unwrap());
+    let mut rounds = || -> Result<u64, Box<dyn std::error::Error>> {
+        stdin.write_all(b"{\"command\":\"getStatus\"}\n")?;
+        stdin.flush()?;
+        let mut line = String::new();
+        stdout.read_line(&mut line)?;
+        let status: serde_json::Value = serde_json::from_str(&line)?;
+        Ok(status["rounds"].as_u64().unwrap())
+    };
+
+    let first = rounds()?;
+    std::thread::sleep(Duration::from_millis(300));
+    let second = rounds()?;
+
+    assert!(second > first, "{first} then {second}");
+    drop(rounds);
+    drop(stdin);
+    assert!(child.wait()?.success());
+    Ok(())
+}
