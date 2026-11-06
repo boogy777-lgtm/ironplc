@@ -9,6 +9,7 @@ import {
   HotEditStatus,
   HotEditTransport,
   parseResponseLine,
+  runStateOf,
 } from '../../hotEditSession';
 import { SUPPORTED_SESSION_PROTOCOL } from '../../sessionConstants';
 import { rejectWith } from './testHelpers';
@@ -852,6 +853,110 @@ suite('HotEditSession HA methods', () => {
       '{"command":"haIoReady"}',
       '{"command":"haCommandedSwap"}',
     ]);
+  });
+});
+
+const FAULT_JSON = '{"vCode":"V4001","message":"trap in task","taskId":2,"instanceId":3}';
+
+/** The identity line with extra top-level members before the closing brace. */
+function identityLineWith(extra: string): string {
+  return `${IDENTITY_LINE.slice(0, -1)},${extra}}`;
+}
+
+suite('Run and Stop wire mirror', () => {
+  test('encodeRequest_when_start_or_stop_scan_then_tag_only_line', () => {
+    assert.strictEqual(encodeRequest('startScan'), '{"command":"startScan"}');
+    assert.strictEqual(encodeRequest('stopScan'), '{"command":"stopScan"}');
+  });
+
+  test('parseResponseLine_when_run_state_then_the_state', () => {
+    assert.deepStrictEqual(
+      parseResponseLine('{"response":"runState","runState":"stopped"}'),
+      { kind: 'runState', runState: 'stopped' },
+    );
+    assert.deepStrictEqual(
+      parseResponseLine('{"response":"runState","runState":"running"}'),
+      { kind: 'runState', runState: 'running' },
+    );
+  });
+
+  test('parseResponseLine_when_run_state_answer_lacks_or_garbles_the_state_then_throws', () => {
+    assert.throws(() => parseResponseLine('{"response":"runState"}'), /missing the run state/);
+    assert.throws(() => parseResponseLine('{"response":"runState","runState":"paused"}'), /malformed runState/);
+  });
+
+  test('parseResponseLine_when_identity_has_run_state_and_fault_then_both_are_read', () => {
+    const response = parseResponseLine(identityLineWith(`"runState":"stopped","fault":${FAULT_JSON}`));
+
+    assert.strictEqual(response.kind, 'identity');
+    if (response.kind === 'identity') {
+      assert.strictEqual(response.identity.runState, 'stopped');
+      assert.deepStrictEqual(response.identity.fault, {
+        vCode: 'V4001',
+        message: 'trap in task',
+        taskId: 2,
+        instanceId: 3,
+      });
+    }
+  });
+
+  test('parseResponseLine_when_identity_has_neither_then_the_keys_are_absent_and_the_state_reads_running', () => {
+    const response = parseResponseLine(IDENTITY_LINE);
+
+    assert.strictEqual(response.kind, 'identity');
+    if (response.kind === 'identity') {
+      assert.ok(!('runState' in response.identity));
+      assert.ok(!('fault' in response.identity));
+      assert.strictEqual(runStateOf(response.identity), 'running');
+    }
+  });
+
+  test('parseResponseLine_when_identity_run_state_or_fault_is_malformed_then_throws', () => {
+    assert.throws(() => parseResponseLine(identityLineWith('"runState":"halted"')), /malformed runState/);
+    assert.throws(() => parseResponseLine(identityLineWith('"fault":"V4001"')), /malformed fault/);
+    assert.throws(() => parseResponseLine(identityLineWith('"fault":{"vCode":"V4001"}')), /malformed fault/);
+  });
+
+  test('startScan_when_run_state_answer_then_sends_the_command_and_resolves_the_state', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.startScan();
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine('{"response":"runState","runState":"running"}');
+
+    assert.strictEqual(await request, 'running');
+    assert.strictEqual(transport.sent[0], '{"command":"startScan"}');
+  });
+
+  test('stopScan_when_run_state_answer_then_sends_the_command_and_resolves_the_state', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.stopScan();
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine('{"response":"runState","runState":"stopped"}');
+
+    assert.strictEqual(await request, 'stopped');
+    assert.strictEqual(transport.sent[0], '{"command":"stopScan"}');
+  });
+
+  test('startScan_when_refused_then_throws_the_coded_error', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.startScan();
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine('{"response":"error","vCode":"V6019","message":"the device is faulted"}');
+
+    await assert.rejects(request, (err: unknown) => err instanceof HotEditProtocolError && err.vCode === 'V6019');
+  });
+
+  test('startScan_when_answered_with_another_kind_then_throws_unexpected', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.startScan();
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine('{"response":"ack"}');
+
+    await assert.rejects(request, /unexpected ack response to startScan/);
   });
 });
 
