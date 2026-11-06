@@ -605,6 +605,7 @@ fn identity_when_fresh_host_then_device_panel_and_live_status_snapshot() {
             redundancy: None,
             persisted_content_hash: None,
             retained: None,
+            fault: None,
         }))
     );
 }
