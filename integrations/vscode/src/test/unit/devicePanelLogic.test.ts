@@ -129,6 +129,15 @@ suite('devicePanelRows', () => {
     assert.strictEqual(byId.get('redundancy.control'), 'active');
   });
 
+  test('devicePanelRows_when_epoch_above_u32_max_then_row_shows_the_full_value', () => {
+    const rows = devicePanelRows(model({
+      state: 'connected',
+      identity: identity({ redundancy: { pairId: '7f3a9c', role: 'primary', epoch: 4294967299, sync: 'syncReady', control: 'active' } }),
+      lastStatus: status(),
+    }));
+    assert.strictEqual(descriptions(rows).get('redundancy.epoch'), '4294967299');
+  });
+
   test('devicePanelRows_when_pending_edit_record_then_row_with_name_and_origin', () => {
     const rows = devicePanelRows(model({
       state: 'connected',

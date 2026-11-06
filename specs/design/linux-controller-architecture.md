@@ -286,7 +286,7 @@ registry (§4.14), T29–T44, and INV15–INV18. What changes for us:
 - **T29–T44:** mostly target-side or already covered by the permit/epoch/
   fencing test suites; the acceptance-matrix adoption stands (audit §6,
   action 4). T41's bounded-execution claim holds by construction today
-  (fixed 38-byte frames, container-sized buffers) and becomes a measured
+  (fixed 42-byte frames, container-sized buffers) and becomes a measured
   property with the daemon.
 
 The audit document carries the formal re-classifications in its dated

@@ -309,8 +309,10 @@ pub struct RedundancyIdentity {
     pub pair_id: String,
     /// The configured role (e.g. `"primary"`).
     pub role: String,
-    /// The ownership epoch.
-    pub epoch: u32,
+    /// The ownership epoch: the value of the redundancy layer's `Epoch`
+    /// (64 bits; this crate may not depend on the redundancy crate, so
+    /// the raw width is stated here and nowhere narrower).
+    pub epoch: u64,
     /// The SYNC substate (e.g. `"syncReady"`).
     pub sync: String,
     /// The CONTROL substate (e.g. `"active"`).

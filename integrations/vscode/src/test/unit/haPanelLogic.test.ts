@@ -206,6 +206,21 @@ suite('haSections', () => {
     assert.ok(sections[0].rows.some(row => row.label === 'Alarms' && row.description === 'none'));
   });
 
+  test('haSections_when_epoch_above_u32_max_then_shows_the_full_value', () => {
+    const wide = 4294967299;
+    const sections = haSections(pairModel({
+      status: status({
+        epoch: wide,
+        local: { ...status().local, epoch: wide },
+      }),
+    }));
+
+    const epoch = sections[0].rows.find(row => row.id === 'pair.epoch');
+    assert.strictEqual(epoch!.description, '4294967299');
+    const local = sections[0].rows.find(row => row.id === 'pair.local');
+    assert.ok(local!.tooltip!.includes('epoch 4294967299'));
+  });
+
   test('haSections_when_not_ready_then_badge_says_so', () => {
     const sections = haSections(pairModel({ status: status({ takeoverReady: false }) }));
 

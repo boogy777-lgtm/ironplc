@@ -2,6 +2,7 @@
 
 status: accepted
 date: 2026-09-16
+amended: 2026-11-06 (the epoch is 64 bits)
 
 ## Context
 
@@ -90,6 +91,34 @@ budget → continuously verify reality**.
 - Timing regressions after commissioning (cable aging, added adapters,
   load growth) surface as degradation alarms while redundancy still works,
   instead of silently eroding the failover guarantee.
+
+## Amendment: the epoch is 64 bits
+
+The epoch is a 64-bit counter. The producer rule above is unchanged: the HA
+supervisor mints one epoch per committed scan round, and only there. Reason:
+the continuous device scan of ADR-0086 makes a round as short as the task
+period allows, so a freewheeling pair program mints about 3.3 million epochs
+per second and saturates 32 bits in about twenty minutes, a 1 ms task in about
+50 days. A saturated epoch can no longer reject a stale packet, which is the
+epoch's only job. At a million rounds per second 64 bits last about 585,000
+years; a JSON number read by the engineering client is exact up to 2^53, about
+285 years at that rate.
+
+The width is decided once, by the `Epoch` type of the redundancy crate; every
+field that carries an epoch holds an `Epoch`, except in the runtime's session
+payload, which may not depend on the redundancy crate and so names the same
+width as `u64`. The encodings carry the full width:
+
+- the ping/pong frame is 42 bytes (it was 38); a frame of the earlier length is
+  dropped as a wrong-length frame;
+- the crossload frame is version 3 (it was 2); a frame of another version is
+  dropped by the version check;
+- the `identity` redundancy block and the `haStatus` and `haBarrier` payloads
+  carry the epoch as a JSON number.
+
+A pair runs one build: the two units of a pair must run versions that agree on
+these layouts. Mixed versions in one pair are not supported; a unit that
+receives the other layout sees no valid peer and does not pair.
 
 ## Timing formulas
 

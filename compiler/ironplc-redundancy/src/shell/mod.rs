@@ -850,7 +850,7 @@ impl Shell {
                         "unit {} claimed {} modules in epoch {}",
                         owner.raw(),
                         self.required.len(),
-                        epoch.raw()
+                        epoch
                     )),
                 );
                 self.record(

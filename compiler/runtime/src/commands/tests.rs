@@ -252,6 +252,22 @@ fn render_response_when_identity_with_redundancy_then_block_serializes() {
 }
 
 #[test]
+fn render_response_when_identity_epoch_above_u32_max_then_full_value_serializes() {
+    let epoch = u64::from(u32::MAX) + 11;
+    let response = identity_response(Some(RedundancyIdentity {
+        epoch,
+        ..redundancy_block()
+    }));
+
+    let line = render_response(&response).unwrap();
+    let value: serde_json::Value = serde_json::from_str(&line).unwrap();
+
+    assert_eq!(value["redundancy"]["epoch"], serde_json::json!(epoch));
+    let back: Response = serde_json::from_str(&line).unwrap();
+    assert_eq!(back, response);
+}
+
+#[test]
 fn parse_command_when_set_device_settings_then_carries_the_named_settings() {
     let command =
         parse_command(r#"{"command":"setDeviceSettings","name":"cell 1","deviceId":"ab"}"#)
