@@ -16,6 +16,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::migration::{KeepPlan, StateMigrationPlan};
+
 /// The mode a client asks for when it stages a candidate (the `mode` field of
 /// `acceptEdits`). `Migrate` is not a mode a client chooses: the host selects
 /// it from the layout hash when the mode is `Change`.
@@ -44,6 +46,37 @@ pub enum CandidateKind {
     /// A replacement: the state is rebuilt and the `PERSISTENT` variables with
     /// an equal declaration copied.
     Replace,
+}
+
+/// The state a staged candidate takes over from the running application, with
+/// what the host needs to carry it out at the swap. One variant for each
+/// [`CandidateKind`]; the matches over it are exhaustive.
+#[derive(Debug)]
+pub(crate) enum Carry {
+    /// Equal layout: the persistent part is carried byte for byte.
+    Change,
+    /// The planned copy per stable variable ID.
+    Migrate(StateMigrationPlan),
+    /// The `PERSISTENT` variables with an equal declaration.
+    Replace(KeepPlan),
+}
+
+impl Carry {
+    /// The kind of the candidate this carries.
+    pub(crate) fn kind(&self) -> CandidateKind {
+        match self {
+            Carry::Change => CandidateKind::Change,
+            Carry::Migrate(_) => CandidateKind::Migrate,
+            Carry::Replace(_) => CandidateKind::Replace,
+        }
+    }
+}
+
+impl AcceptMode {
+    /// Whether this is the mode an absent field means; it is left off the wire.
+    pub(crate) fn is_default(&self) -> bool {
+        *self == AcceptMode::default()
+    }
 }
 
 impl CandidateKind {

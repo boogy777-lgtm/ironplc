@@ -313,7 +313,7 @@ impl Executing {
     /// `assembleEdits`, and the acknowledgment means the swap has been applied,
     /// not merely recorded.
     pub(crate) fn awaits_boundary(&self) -> bool {
-        self.advances && matches!(self.response, Response::Ack)
+        self.advances && self.response.is_acknowledgment()
     }
 }
 
@@ -429,7 +429,7 @@ pub(crate) fn finish_line<P: NicPort>(
     ha: Option<&mut Ha<P>>,
     executing: Executing,
 ) -> io::Result<String> {
-    let acked = matches!(executing.response, Response::Ack);
+    let acked = executing.response.is_acknowledgment();
     let mut rendered: Option<String> = None;
     if acked && executing.commits {
         // ADR-0064 amendment: persist before the line renders, so

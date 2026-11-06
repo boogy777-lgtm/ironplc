@@ -107,6 +107,11 @@ impl KeepPlan {
         &self.reinitialised
     }
 
+    /// The copies of the kept values, as a migration plan.
+    pub(crate) fn plan(&self) -> &StateMigrationPlan {
+        &self.plan
+    }
+
     /// Copies the kept values from the running application's buffers into the
     /// candidate's freshly initialized ones, exactly as the migration swap does.
     pub fn apply(&self, running: &VmBuffers, fresh: &mut VmBuffers) -> Result<(), MigrationError> {

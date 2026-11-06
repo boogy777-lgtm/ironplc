@@ -50,14 +50,16 @@ fn view_in(state: State) -> EditView {
 fn expected_stage_and_next(state: State) -> (EditStage, Option<EditCommand>) {
     match state {
         State::NoCandidate => (EditStage::Idle, Some(EditCommand::Accept)),
-        State::Accepted | State::AcceptedMigration => {
+        State::Accepted | State::AcceptedMigration | State::AcceptedReplace => {
             (EditStage::Accepted, Some(EditCommand::Test))
         }
         State::Testing => (EditStage::Testing, Some(EditCommand::Assemble)),
         State::TestingMigration => (EditStage::TestingMigration, Some(EditCommand::Assemble)),
-        State::TestPending | State::TestPendingMigration | State::UntestPending => {
-            (EditStage::SwapPending, None)
-        }
+        State::TestingReplace => (EditStage::TestingReplace, Some(EditCommand::Assemble)),
+        State::TestPending
+        | State::TestPendingMigration
+        | State::TestPendingReplace
+        | State::UntestPending => (EditStage::SwapPending, None),
     }
 }
 

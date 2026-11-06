@@ -369,11 +369,13 @@ impl IronPlcMcp {
                 Err(response) => response,
                 Ok(candidate) => {
                     let migration = input.migration;
+                    let mode = input.mode;
                     self.run_hot_edit(input.device, move |target| {
                         tools::hot_edit::send_candidate(
                             candidate.program,
                             candidate.ids_out_of_sync,
                             &migration,
+                            mode,
                             target,
                         )
                     })

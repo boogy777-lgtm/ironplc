@@ -17,11 +17,12 @@ use ironplc_container::integrity::{self, HASH_LEN, NO_HASH};
 use ironplc_container::{Container, FORMAT_VERSION};
 use serde::{Deserialize, Serialize};
 
+use crate::candidate::{AcceptMode, CandidateKind};
 use crate::conversion::type_name;
 use crate::edit_view::{edit_view, EditStage, EditView};
 use crate::error::OnlineChangeError;
 use crate::host::{AcceptedEdit, HostMode, HostStatus, PendingEditRecord, RuntimeHost};
-use crate::migration::{MigrationDecision, MigrationError, TypeChangePair};
+use crate::migration::{MigrationDecision, MigrationError, Reinitialised, TypeChangePair};
 use crate::problem_codes;
 
 /// A command in the hot-edit protocol.
@@ -52,6 +53,14 @@ pub enum Command {
             skip_serializing_if = "BTreeMap::is_empty"
         )]
         migration: BTreeMap<u64, MigrationDecisionSpec>,
+        /// How the candidate takes the place of the running application
+        /// (ADR-0088). `change` (the default) continues it: a body edit, or a
+        /// state migration when the layout differs. `replace` is a Download:
+        /// the application is replaced and only its `PERSISTENT` variables
+        /// with an equal declaration keep their value. The `migration` map
+        /// decides type changes of a migration and is not read in `replace`.
+        #[serde(default, skip_serializing_if = "AcceptMode::is_default")]
+        mode: AcceptMode,
     },
     /// Activates the staged candidate at the next scan boundary.
     TestEdits,
@@ -201,6 +210,12 @@ pub struct StatusPayload {
     /// Whether the staged candidate changes the schema, i.e. carries a state
     /// migration plan because its layout hash differs.
     pub migration: bool,
+    /// How the staged candidate takes over the state: `change`, `migrate` or
+    /// `replace` (ADR-0088). Absent on the wire when no candidate is staged and
+    /// from a device that predates the field. A `migrate` and a `replace`
+    /// candidate cannot be reverted once it runs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub candidate_mode: Option<CandidateKind>,
     /// Completed scan rounds since the host was created.
     pub rounds: u64,
     /// The pending-edit record written at Accept, if a candidate is staged
@@ -244,6 +259,7 @@ impl From<HostStatus> for StatusPayload {
             candidate: status.candidate.map(|generation| generation.raw()),
             application: status.application.raw(),
             migration: status.migration,
+            candidate_mode: status.kind,
             rounds: status.rounds,
             pending_edit: status.pending_edit,
             content_hash: wire_hash(&status.content_hash),
@@ -439,9 +455,9 @@ pub struct CandidateLost {
     /// The advisory client label of that accept, when it carried one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub origin: Option<String>,
-    /// How far the edit had come: `accepted`, `testing` or `testingMigration`.
-    /// Absent when the note itself was damaged and an edit is known to have
-    /// been lost and nothing more.
+    /// How far the edit had come: `accepted`, `testing`, `testingMigration` or
+    /// `testingReplace`. Absent when the note itself was damaged and an edit is
+    /// known to have been lost and nothing more.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stage: Option<EditStage>,
 }
@@ -483,6 +499,17 @@ pub enum Response {
     Status(StatusPayload),
     /// The command succeeded; there is nothing further to report.
     Ack,
+    /// The answer to a [`Command::AcceptEdits`] in `replace` mode that was
+    /// accepted: an acknowledgment that lists the `PERSISTENT` variables of the
+    /// running application that the replace reinitialises, so a reset is never
+    /// silent (ADR-0088). A client that sends the default mode never receives
+    /// it; every client handles it as an acknowledgment (see
+    /// [`Response::is_acknowledgment`]).
+    Accepted {
+        /// The `PERSISTENT` variables that are reinitialised, empty when every
+        /// one is kept.
+        reinitialised: Vec<Reinitialised>,
+    },
     /// The answer to [`Command::StartScan`] and [`Command::StopScan`]: an
     /// acknowledgment that carries the run state the device is in now.
     RunState {
@@ -492,6 +519,22 @@ pub enum Response {
     },
     /// The command failed; carries a stable V-code and the host's message.
     Error(CommandError),
+}
+
+impl Response {
+    /// Whether the response acknowledges a command that was carried out: a
+    /// plain [`Response::Ack`], or the [`Response::Accepted`] of an accept in
+    /// `replace` mode. A client that waits for an acknowledgment tests this and
+    /// not the variant, so a new kind of acknowledgment is one more arm here.
+    pub fn is_acknowledgment(&self) -> bool {
+        match self {
+            Response::Ack | Response::Accepted { .. } => true,
+            Response::Identity(_)
+            | Response::Status(_)
+            | Response::RunState { .. }
+            | Response::Error(_) => false,
+        }
+    }
 }
 
 /// Why a command failed: a stable V-code plus the host's own description of
@@ -653,7 +696,8 @@ pub fn execute(command: Command, host: &mut RuntimeHost, device: &DeviceIdentity
             program,
             edit,
             migration,
-        } => accept_edits(host, &program, edit, &migration),
+            mode,
+        } => accept_edits(host, &program, edit, &migration, mode),
         Command::TestEdits => ack_or_error(host.test()),
         Command::UntestEdits => ack_or_error(host.untest()),
         Command::AssembleEdits => ack_or_error(host.assemble()),
@@ -677,6 +721,7 @@ fn accept_edits(
     program: &[u8],
     edit: Option<EditSpec>,
     migration: &BTreeMap<u64, MigrationDecisionSpec>,
+    mode: AcceptMode,
 ) -> Response {
     let candidate = match Container::read_from(&mut Cursor::new(program)) {
         Ok(candidate) => candidate,
@@ -690,15 +735,18 @@ fn accept_edits(
         .iter()
         .map(|(&uid, &spec)| (uid, MigrationDecision::from(spec)))
         .collect();
-    ack_or_error(host.stage_with_decisions(
-        candidate,
-        &decisions,
-        Some(AcceptedEdit {
-            wire: program.to_vec(),
-            name,
-            origin,
-        }),
-    ))
+    let edit = Some(AcceptedEdit {
+        wire: program.to_vec(),
+        name,
+        origin,
+    });
+    match mode {
+        AcceptMode::Change => ack_or_error(host.stage_with_decisions(candidate, &decisions, edit)),
+        AcceptMode::Replace => match host.stage_replacing(candidate, edit) {
+            Ok(reinitialised) => Response::Accepted { reinitialised },
+            Err(error) => Response::Error(CommandError::from(error)),
+        },
+    }
 }
 
 /// Turns a host result into an acknowledgment or the coded error.

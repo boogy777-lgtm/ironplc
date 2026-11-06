@@ -3,7 +3,7 @@
 use super::*;
 use crate::tools::test_support::{ed2_options, source, COUNTER_PROGRAM, SYNTAX_ERROR_PROGRAM};
 use ironplc_container::VarIndex;
-use ironplc_runtime::HostMode;
+use ironplc_runtime::{AcceptMode, HostMode};
 
 fn make_state() -> (Mutex<ContainerCache>, Mutex<HotEditSession>) {
     (
@@ -139,6 +139,7 @@ fn send_candidate_when_ids_are_out_of_sync_then_not_sent_and_no_session() {
         program,
         Some("the stable variable IDs are out of sync with the declarations".to_string()),
         &BTreeMap::new(),
+        AcceptMode::Change,
         &session,
     );
 
@@ -404,6 +405,7 @@ END_PROGRAM
                 program: bytes,
                 edit: None,
                 migration: BTreeMap::new(),
+                mode: AcceptMode::Change,
             },
             guard.host.as_mut().unwrap(),
             &mcp_device_identity(),
@@ -510,6 +512,7 @@ END_PROGRAM
             program: bytes,
             edit: None,
             migration: BTreeMap::new(),
+            mode: AcceptMode::Change,
         },
         &mut guard,
         false,
@@ -571,6 +574,7 @@ END_PROGRAM
             program: bytes,
             edit: None,
             migration: BTreeMap::from([(1, MigrationDecisionSpec::Preserve)]),
+            mode: AcceptMode::Change,
         },
         &mut guard,
         false,
@@ -629,6 +633,7 @@ END_PROGRAM
             program: bytes,
             edit: None,
             migration: BTreeMap::from([(1, MigrationDecisionSpec::Init)]),
+            mode: AcceptMode::Change,
         },
         &mut guard,
         false,
@@ -771,6 +776,7 @@ fn dispatch_when_accept_payload_is_not_a_container_then_v4016() {
             program: vec![1, 2, 3],
             edit: None,
             migration: BTreeMap::new(),
+            mode: AcceptMode::Change,
         },
         &mut guard,
         false,

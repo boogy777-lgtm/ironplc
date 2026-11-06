@@ -71,7 +71,7 @@ impl RuntimeHost {
         }
 
         if self.active_is_candidate && snapshot.layout_matches(&self.normal) {
-            if self.migration.is_some() {
+            if !self.carry.kind().reverts() {
                 // Untest after a schema-changing test is forbidden
                 // (V4011); a retreat image names exactly that.
                 return Err(OnlineChangeError::UntestUnsupported);
@@ -104,7 +104,7 @@ impl RuntimeHost {
         if self.pending.is_some() {
             return Err(OnlineChangeError::NotAllowedInThisMode);
         }
-        if self.migration.is_some() {
+        if !self.carry.kind().reverts() {
             return Err(OnlineChangeError::NotAllowedInThisMode);
         }
         self.active_is_candidate = true;
