@@ -1,17 +1,17 @@
 /**
- * The build commands of the engineering connection: `ironplc.build` (Build &
- * Commit, the finalize-equivalent) and `ironplc.download` (Download, the
- * replace mode, ADR-0088). The online-edit dialog (`onlineEditCommands`) shares
- * their compile, session and record through `BuildSupport`. All reuse
- * the connected `HotEditSession` and the vscode-free sequencing in
- * `buildLogic` and `downloadLogic`; this module is glue — it resolves the program, compiles it
- * with the shared compile path, and renders phases and errors. Build refuses while the baseline is stale (E0015, fail-
- * closed) and only in the Connected state, the only state that may send
- * commands; Download does not refuse a stale baseline, because it replaces the
- * application and says so in its confirmation. The device's acknowledgement of an assemble (Build & Commit, the dialog's
- * Assemble, the Download) is handled in one function,
- * `acknowledgeAssemble`, which records the download. A build writes the shared Build area (`buildAreaLogic`), which it
- * receives from the caller and clears when it starts.
+ * The build support of the engineering connection and the Download
+ * (`ironplc.download`, the replace mode, ADR-0088). The online-edit dialog
+ * (`onlineEditCommands`) sends an edit step by step and shares the compile, the
+ * session and the record of an acknowledged assemble through `BuildSupport`, so
+ * each exists once. The Download reuses the connected `HotEditSession` and the
+ * vscode-free sequencing in `downloadLogic`; this module is glue: it resolves
+ * the program, compiles it with the shared compile path, and renders phases and
+ * errors. Download does not refuse a stale baseline, because it replaces the
+ * application and says so in its confirmation. The device's acknowledgement of
+ * an assemble (the dialog's Assemble, the Download) is handled in one function,
+ * `acknowledgeAssemble`, which records the download. A build writes the shared
+ * Build area (`buildAreaLogic`), which it receives from the caller and clears
+ * when it starts.
  */
 
 import * as vscode from 'vscode';
@@ -25,9 +25,7 @@ import { isDebuggableProgram, programKind } from './debugAdapterLogic';
 import { ReportProblem } from './debugAdapter';
 import { ProblemCode } from './vscodeCommon';
 import {
-  EditIdentity,
   formatStatusText,
-  HotEditProtocolError,
   HotEditSession,
   HotEditStatus,
 } from './hotEditSession';
@@ -44,8 +42,7 @@ import {
   syncIdsStep,
 } from './downloadLogic';
 import { ConnectionFeature } from './connection';
-import { BuildSession, runBuildCommit } from './buildLogic';
-import { createMigrationDecisionUi, createSyncResolutionUi, resolvePathInteractive } from './hotEdit';
+import { createSyncResolutionUi, resolvePathInteractive } from './hotEdit';
 
 /** The container a build sends: the file it is read from, and its bytes. */
 export interface SentContainer {
@@ -55,10 +52,6 @@ export interface SentContainer {
 
 /** The advisory origin label every build stamps on its pending-edit record. */
 export const BUILD_ORIGIN = 'ironplc-vscode';
-
-/** What the person is told when a build would go over an application that was not downloaded from this project (E0015). */
-export const STALE_BASELINE_DETAIL
-  = 'The application on the device is not the one this project last downloaded to it. Re-sync the project from the device, rebuild, then connect again.';
 
 /** A step of a Download failed and the person has been told: the sequence stops quietly. */
 class ReportedError extends Error {}
@@ -92,7 +85,6 @@ export function registerBuildCommands(
   showCoded: (code: string, text: string) => void,
 ): BuildSupport {
   context.subscriptions.push(
-    vscode.commands.registerCommand('ironplc.build', build),
     vscode.commands.registerCommand(DOWNLOAD_ACTIONS.download.commandId, download),
   );
 
@@ -109,60 +101,6 @@ export function registerBuildCommands(
     }
     await connection.settled();
     return session;
-  }
-
-  async function build(): Promise<void> {
-    const session: BuildSession | undefined = await connectedSession();
-    if (!session) {
-      return;
-    }
-    if (connection.baselineState === 'mismatch') {
-      reportProblem(ProblemCode.StaleBaseline, STALE_BASELINE_DETAIL);
-      return;
-    }
-
-    const program = await resolvePathInteractive(
-      'Select the program to build',
-      candidate => isDebuggableProgram(candidate, sourceExtensions),
-      'IronPLC programs',
-      ['iplc', ...sourceExtensions.map(ext => ext.replace('.', ''))],
-    );
-    if (!program) {
-      return;
-    }
-
-    connection.setBuildPhase('compiling');
-    const sent = await compileReported(program);
-    if (sent === undefined) {
-      connection.setBuildPhase(null);
-      return;
-    }
-
-    const edit: EditIdentity = { name: path.basename(program), origin: BUILD_ORIGIN };
-    try {
-      const status = await runBuildCommit(
-        session,
-        sent.bytes,
-        edit,
-        createMigrationDecisionUi(),
-        phase => connection.setBuildPhase(phase),
-      );
-      await acknowledgeAssemble(sent.path, status);
-      void vscode.window.showInformationMessage(`IronPLC Build: ${formatStatusText(status)}.`);
-    }
-    catch (err) {
-      if (err instanceof HotEditProtocolError) {
-        void vscode.window.showErrorMessage(`IronPLC Build: ${err.toString()}`);
-      }
-      else {
-        void vscode.window.showErrorMessage(
-          `IronPLC Build: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
-    }
-    finally {
-      connection.setBuildPhase(null);
-    }
   }
 
   /**

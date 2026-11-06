@@ -136,11 +136,6 @@
         "category": "IronPLC: Network"
       },
       {
-        "command": "ironplc.build",
-        "title": "Build & Commit",
-        "category": "IronPLC"
-      },
-      {
         "command": "ironplc.download",
         "title": "Download to Controller",
         "category": "IronPLC"

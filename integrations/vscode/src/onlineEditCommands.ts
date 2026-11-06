@@ -17,7 +17,7 @@ import * as path from 'path';
 
 import { ReportProblem } from './debugAdapter';
 import { isDebuggableProgram, programKind } from './debugAdapterLogic';
-import { BuildSupport, BUILD_ORIGIN, SentContainer, STALE_BASELINE_DETAIL } from './buildCommands';
+import { BuildSupport, BUILD_ORIGIN, SentContainer } from './buildCommands';
 import { ConnectionFeature } from './connection';
 import { formatStatusText, HotEditStatus } from './hotEditSession';
 import { acceptEditsWithDecisions } from './hotEditMigrationLogic';
@@ -31,6 +31,10 @@ import {
 } from './onlineEditLogic';
 import { OnlineEditIo, runItem, runMessage } from './onlineEditRunner';
 import { ProblemCode } from './vscodeCommon';
+
+/** What the person is told when a build would go over an application that was not downloaded from this project (E0015). */
+export const STALE_BASELINE_DETAIL
+  = 'The application on the device is not the one this project last downloaded to it. Re-sync the project from the device, rebuild, then connect again.';
 
 /** A build made in this dialog: the program and the container that was sent. */
 interface Built {
