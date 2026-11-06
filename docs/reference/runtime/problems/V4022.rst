@@ -1,0 +1,36 @@
+=====
+V4022
+=====
+
+.. problem-summary:: V4022
+
+A client sent ``startScan`` or ``stopScan`` to a host that has no scan to start
+or stop. The ``ironplcvm serve`` device runs its scan rounds on a loop of its own
+and answers these commands itself: it executes rounds while it is running and
+none while it is stopped. A host without such a loop, such as the in-process host
+that the MCP server runs for hot-edit sessions, executes a round only when a
+client asks for one, so there is nothing to start or stop. It refuses the command
+and changes nothing.
+
+The runtime command layer does not drive rounds, so the application that does
+answers the command. A host that is not such an application answers V4022 so
+that a client learns at once that the command cannot work there, and does not
+wait for rounds that never start or stop. The command does not touch the
+hot-edit state: a refused ``startScan`` or ``stopScan`` leaves a staged
+candidate, a running test and the application as they were. The same
+code answers the command on a device that serves a redundant pair over the pair
+link, which does not scan between commands yet.
+
+Solutions
+---------
+
+1. Send the command to a device that scans by itself: ``ironplcvm serve`` over
+   standard input and output or over TCP, without a pair link.
+2. Read the device with ``identity`` instead. Its ``runState`` field says whether
+   the device executes rounds; the command is not needed to read it.
+
+See Also
+--------
+
+- :doc:`/reference/runtime/problems/V4021` --- the host has no device settings to change
+- :doc:`/reference/runtime/problems/V6019` --- the device is faulted and cannot be started
