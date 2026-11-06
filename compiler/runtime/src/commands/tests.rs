@@ -150,6 +150,7 @@ fn identity_response_of(
         redundancy,
         persisted_content_hash: None,
         retained: None,
+        fault: None,
     }))
 }
 
@@ -624,4 +625,37 @@ fn render_response_when_boot_note_has_no_reason_then_reason_is_absent() {
         serde_json::to_value(&note).unwrap(),
         serde_json::json!({"result": "applied"})
     );
+}
+
+#[test]
+fn render_response_when_identity_not_faulted_then_fault_is_absent() {
+    let line = render_response(&identity_response(None)).unwrap();
+
+    assert!(!line.contains("fault"));
+}
+
+#[test]
+fn identity_when_faulted_then_fault_field_round_trips() {
+    let Response::Identity(mut payload) = identity_response(None) else {
+        panic!("identity_response builds an identity");
+    };
+    payload.fault = Some(FaultNote {
+        v_code: "V4001".into(),
+        message: "runtime error: divide by zero (task 0, instance 0)".into(),
+        task_id: 3,
+        instance_id: 5,
+    });
+    let line = render_response(&Response::Identity(payload.clone())).unwrap();
+    let value: serde_json::Value = serde_json::from_str(&line).unwrap();
+
+    assert_eq!(
+        value["fault"],
+        serde_json::json!({
+            "vCode": "V4001",
+            "message": "runtime error: divide by zero (task 0, instance 0)",
+            "taskId": 3,
+            "instanceId": 5,
+        })
+    );
+    assert_eq!(parse_response(&line).unwrap(), Response::Identity(payload));
 }

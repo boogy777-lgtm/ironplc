@@ -27,7 +27,8 @@ A session stages an edit and tries to assemble it before testing:
    {"response":"error","vCode":"V4017","message":"assemble requires the candidate to have executed under Test"}
 
 To fix this error, run the candidate under Test first — ``testEdits``,
-then one scan round, then ``assembleEdits``:
+whose acknowledgment means the candidate has run a scan round, then
+``assembleEdits``:
 
 .. code-block::
 

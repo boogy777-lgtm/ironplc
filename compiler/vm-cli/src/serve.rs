@@ -1,14 +1,20 @@
 //! The `ironplcvm serve` command: a newline-delimited JSON command session
 //! over the runtime host's hot-edit protocol, composed with the HA
-//! redundancy shell's engineering surface.
+//! redundancy shell's engineering surface, while the device scans by itself.
 //!
 //! [`serve`] loads and starts a compiled program through the same container
 //! path as `run` (see [`crate::cli::load_container`]), then answers one line
-//! of JSON per line of stdin until EOF. Stdout is the protocol channel:
-//! startup prints nothing, every response line is flushed as written, and
-//! anything diagnostic goes to stderr through the logger. The TCP transport
-//! of the engineering connection (ADR-0063) is the same session loop over a
-//! length-prefixed frame — see [`crate::tcp`].
+//! of JSON per line of stdin until EOF or Ctrl+C. Stdout is the protocol
+//! channel: startup prints nothing, every response line is flushed as
+//! written, and anything diagnostic goes to stderr through the logger. The TCP
+//! transport of the engineering connection (ADR-0063) is the same session over
+//! a length-prefixed frame — see [`crate::tcp`].
+//!
+//! The scan is run by the device loop ([`crate::device_loop`], ADR-0086), which
+//! owns the host: a session thread relays each line to it and writes its
+//! answer. This module is the loop's dispatch and composition: [`execute_line`]
+//! executes a line, [`finish_line`] writes its response, and [`paced_round`]
+//! runs a round; the loop calls them between rounds.
 //!
 //! The session composes both command layers (the HA engineering UI
 //! contract, `ironplcvm serve`'s client mapping): every line first parses
@@ -24,17 +30,17 @@
 //!
 //! The FSM-advancing commands (`testEdits`, `untestEdits`, `assembleEdits`)
 //! only *request* a swap; the host applies it at the next scan boundary
-//! ([`RuntimeHost::run`]). After one of them is acknowledged, the session
-//! drives one scan round at a constant zero uptime — the convention of the
-//! runtime acceptance tests — so a scripted client reads back state that has
-//! actually switched. A trap in the driven round is the running
-//! application's own fault: it is logged to stderr with the trap's V-code
-//! and the session continues.
+//! ([`RuntimeHost::run_paced_round`]). The loop does not wait for the period
+//! for it: the next round is the boundary, and the response line is written
+//! after it ([`Executing::awaits_boundary`]), so the acknowledgment means the
+//! swap has been applied and a client reads back state that has actually
+//! switched. A trap in a round is the application's own fault: the device
+//! scans no more, keeps answering, and reports the fault in `identity`.
 //!
 //! `assembleEdits` is also the single commit point (ADR-0064 amendment): the
 //! session persists the host's committed wire bytes through the A/B
-//! [`SlotStore`] after the driven boundary round, before the response line
-//! is rendered. A persistence failure answers the wire with V6012 instead of
+//! [`SlotStore`] after the boundary round, before the response line is
+//! rendered. A persistence failure answers the wire with V6012 instead of
 //! the ack — the RAM promotion stands and the client learns the commit is
 //! live but not durable. Boot adopts the newest verifiable generation from
 //! the store, so a reboot after an acknowledged assemble boots the committed
@@ -51,17 +57,19 @@
 //! command line — the command cadence is the simulation clock — and the
 //! session reconciles the permit latch with the shell's verdict after every
 //! command (a commanded swap demotes this unit: its scans refuse at the
-//! latch from the next line on). The driven round's scan-commit callback
-//! feeds the HA backend's scan-commit seam, the supervisor's mint seam.
+//! latch from the next line on). A round's scan-commit callback feeds the HA
+//! backend's scan-commit seam, the supervisor's mint seam.
 //!
-//! The dispatch itself ([`handle_line`]) is shared with pair mode, whose
-//! pump loop ([`crate::ha_pair`]) calls it per line and per pump tick: one
-//! code path answers the runtime vocabulary, the driven rounds, the slot
-//! persistence, and — in pair mode — the ADR-0064 crossload hooks (the
-//! offer at Accept, the state update at Test, the cancel/untest/assemble
-//! notices) through the [`Ha`] backend enum.
+//! The pair path ([`crate::ha_pair`]) does not run on the loop yet (stage 3d
+//! of the online-model plan, ADR-0086): its pump calls [`handle_line`] per
+//! line and per pump tick, which executes and finishes a line like the loop
+//! does and drives the boundary round of a swap request itself
+//! ([`drive_scan_round`]). Both paths answer the runtime vocabulary, the slot
+//! persistence, and — in pair mode — the ADR-0064 crossload hooks (the offer at
+//! Accept, the state update at Test, the cancel/untest/assemble notices)
+//! through the [`Ha`] backend enum.
 
-use std::io::{self, BufRead, Write};
+use std::io;
 use std::path::Path;
 
 use ironplc_container::Container;
@@ -72,12 +80,15 @@ use ironplc_redundancy::{
 };
 use ironplc_runtime::{
     execute, parse_command, render_response, Command, RedundancyIdentity, Response, RuntimeError,
-    RuntimeHost,
+    RuntimeHost, ScanCommit,
 };
+use ironplc_vm::FaultContext;
 
+use crate::device_loop::{self, relay_session, DeviceLoop, End};
 use crate::device_settings::device::Device;
 use crate::device_settings::Entries;
 use crate::error::{self, VmError};
+use crate::pacer::Pacer;
 use crate::slot_store::SlotStore;
 
 /// The HA backend one session serves: the demo binding's simulator shell,
@@ -94,35 +105,56 @@ pub(crate) enum Ha<'a> {
 /// Boots the committed artifact from the A/B slot store beside `path`
 /// (seeding the store from the file on first serve), composes the runtime
 /// host with the HA shell (standalone by default; the simulated loopback
-/// pair under `ha_simulated_peer`), and serves commands until stdin reaches
-/// EOF.
+/// pair under `ha_simulated_peer`), and serves commands on stdin and stdout
+/// while the device loop scans, until stdin reaches EOF or Ctrl+C.
 pub fn serve(path: &Path, ha_simulated_peer: bool) -> Result<(), VmError> {
-    let mut store = SlotStore::beside(path);
+    let store = SlotStore::beside(path);
     let container = store.boot()?;
-    let (mut host, mut shell) = compose_host(container, ha_simulated_peer)?;
+    let (mut host, shell) = compose_host(container, ha_simulated_peer)?;
     let mut device = Device::open(path)?;
     device.boot_application(&mut host);
 
-    let stdin = io::stdin();
-    let stdout = io::stdout();
-    let session = serve_session(
-        &mut host,
-        stdin.lock(),
-        stdout.lock(),
-        Some(&mut store),
-        &mut device,
-        Some(&mut shell),
-    )
-    .map_err(|err| {
-        VmError::io(
-            error::SESSION_IO,
-            format!("unable to read or write the command session: {err}"),
-        )
-    });
-    stop_device(&mut device, &host, session)
+    let stop = crate::cli::stop_on_ctrl_c()?;
+    let (handle, commands) = device_loop::channel();
+    // The session thread: the loop is the main thread, because it ends the
+    // process in order (it writes the retained values), and a read of stdin
+    // cannot be interrupted.
+    let relay = std::thread::Builder::new()
+        .name("serve-stdio".to_string())
+        .spawn(move || relay_session(&handle, io::stdin().lock(), io::stdout().lock()))
+        .map_err(|err| {
+            VmError::io(
+                error::SESSION_IO,
+                format!("unable to spawn the session thread: {err}"),
+            )
+        })?;
+    let mut device_loop = DeviceLoop::new(
+        host,
+        Some(store),
+        device,
+        shell,
+        Pacer::start(stop, None),
+        commands,
+    );
+    let session = match device_loop.run() {
+        // The session thread ended: its outcome is the outcome of the session.
+        End::Closed => relay
+            .join()
+            .unwrap_or_else(|_| Err(io::Error::other("the session thread panicked")))
+            .map_err(|err| {
+                VmError::io(
+                    error::SESSION_IO,
+                    format!("unable to read or write the command session: {err}"),
+                )
+            }),
+        // Ctrl+C: the session thread may be blocked in a read of stdin that
+        // only the end of the process interrupts.
+        End::Stopped => Ok(()),
+    };
+    device_loop.stop(session)
 }
 
-/// The controlled stop of a served process: the end of its input. Writes the
+/// The controlled stop of a served process: the end of its input, or Ctrl+C. Writes the
 /// retained values (V6018 when it cannot), then returns the outcome of the
 /// session. A failed session is the error to report; a failed write is the
 /// error of a session that otherwise ended well, and is logged in both cases.
@@ -213,43 +245,6 @@ fn compose_shell(ha_simulated_peer: bool) -> Shell {
     Shell::simulated(config, registry, vec![ModuleId::new(0), ModuleId::new(1)])
 }
 
-/// Serves one command session: reads one line per command from `reader`,
-/// writes one line per response to `writer`, flushing after every line.
-///
-/// The HA-advancing tick is this loop's own: the simulator shell advances
-/// one tick per command line (the command cadence is its simulation
-/// clock), while pair mode pumps on its own cadence — see
-/// [`crate::ha_pair`]. Everything after the tick is the shared
-/// [`handle_line`] dispatch.
-///
-/// Returns when the reader reaches EOF, or with the first I/O failure.
-pub fn serve_session(
-    host: &mut RuntimeHost,
-    reader: impl BufRead,
-    mut writer: impl Write,
-    mut store: Option<&mut SlotStore>,
-    device: &mut Device,
-    mut ha: Option<&mut Shell>,
-) -> io::Result<()> {
-    for line in reader.lines() {
-        let line = line?;
-        // The simulated pair's clock: one tick per command line, whatever
-        // the command — the hot-edit keepalive advances the pair too.
-        if let Some(shell) = ha.as_deref_mut() {
-            if shell.has_pair() {
-                shell.tick();
-            }
-        }
-        // The HA backend for this line: the shell behind one enum the
-        // shared dispatch understands (pair mode passes its own).
-        let mut backend = ha.as_mut().map(|shell| Ha::Shell(shell));
-        let response = handle_line(host, store.as_deref_mut(), device, backend.as_mut(), &line)?;
-        writeln!(writer, "{response}")?;
-        writer.flush()?;
-    }
-    Ok(())
-}
-
 /// The pair-lifecycle notice one acknowledged hot-edit command owes the
 /// pair link (ADR-0064): what the session enqueues after the local state
 /// committed, so the peer mirrors the lifecycle.
@@ -276,37 +271,63 @@ fn pair_notice_for(command: &Command) -> Option<PairNotice> {
     }
 }
 
-/// Answers one command line with the session's single response line.
+/// A command line after the runtime command layer executed it, before its
+/// response line is written.
+pub(crate) enum Executed {
+    /// The line is answered: a settings change, an HA command, a malformed
+    /// line. Nothing is left to do.
+    Answer(String),
+    /// A runtime command was executed; see [`Executing`] for what remains.
+    Command(Executing),
+}
+
+/// A runtime command that was executed and whose response line is not written
+/// yet. [`finish_line`] writes it, once [`awaits_boundary`](Self::awaits_boundary)
+/// has been answered by a scan boundary.
+pub(crate) struct Executing {
+    response: Response,
+    commits: bool,
+    advances: bool,
+    pair_notice: Option<PairNotice>,
+}
+
+impl Executing {
+    /// Whether the response has to wait for a scan boundary: the command is an
+    /// acknowledged request of a swap (`testEdits`, `untestEdits`,
+    /// `assembleEdits`), and the acknowledgment means the swap has been
+    /// applied, not merely recorded.
+    pub(crate) fn awaits_boundary(&self) -> bool {
+        self.advances && matches!(self.response, Response::Ack)
+    }
+}
+
+/// Executes one command line through the runtime command layer (and the HA
+/// layer for a line that is not a runtime command), up to the point where the
+/// response depends on a scan boundary.
 ///
-/// A command that advances the hot-edit FSM (`testEdits`, `untestEdits`,
-/// `assembleEdits`) drives one scan round after its acknowledgment, before
-/// the response line is written (see [`drive_scan_round`]). An acknowledged
-/// `assembleEdits` with a `store` also persists the committed wire bytes
-/// before the response line is written (see [`persist_commit`]); a
-/// `None` store serves the honestly RAM-only session (no persistence).
 /// `device` holds the device's settings (see [`crate::device_settings`]): its
 /// identity answers the `identity` handshake (ADR-0063), the first command on
 /// every transport, and `setDeviceSettings` changes it. The runtime command
 /// layer has no file system, so the settings command is answered here, the way
-/// the slot store persists the commit of `assembleEdits`. In pair mode, an acknowledged hot-edit
-/// command also owes the pair its ADR-0064 notice (see [`PairNotice`]).
-pub(crate) fn handle_line(
+/// the slot store persists the commit of `assembleEdits` (see [`finish_line`]).
+pub(crate) fn execute_line(
     host: &mut RuntimeHost,
-    store: Option<&mut SlotStore>,
     device: &mut Device,
     mut ha: Option<&mut Ha>,
     line: &str,
-) -> io::Result<String> {
+) -> io::Result<Executed> {
     match parse_command(line) {
-        Ok(Command::SetDeviceSettings { settings }) => set_device_settings_line(device, &settings),
+        Ok(Command::SetDeviceSettings { settings }) => {
+            set_device_settings_line(device, &settings).map(Executed::Answer)
+        }
         Ok(command) => {
             let commits = matches!(command, Command::AssembleEdits);
             let advances = advances_state(&command);
             let pair_notice = pair_notice_for(&command);
             let mut response = execute(command, host, &device.identity());
-            // The facts of the device's storage (what it would boot, what it
-            // did with the retained file at boot): the device owns them, the
-            // runtime layer leaves the fields empty.
+            // The facts of the device (what it would boot, what it did with
+            // the retained file at boot, whether its scan trapped): the
+            // device owns them, the runtime layer leaves the fields empty.
             if let Response::Identity(payload) = &mut response {
                 device.complete_identity(payload);
             }
@@ -317,35 +338,14 @@ pub(crate) fn handle_line(
             if let (Some(backend), Response::Identity(payload)) = (ha.as_mut(), &mut response) {
                 payload.redundancy = ha_identity_block(backend);
             }
-            let acked = matches!(response, Response::Ack);
-            if acked && advances {
-                if let Some(err) = drive_scan_round(host, ha.as_deref_mut()) {
-                    log::error!("driven scan round trapped: {err}");
-                }
-                device.scan_boundary(host);
-            }
-            let mut rendered: Option<String> = None;
-            if acked && commits {
-                // ADR-0064 amendment: persist before the line renders, so
-                // a failure answers V6012 instead of an ack.
-                if let Some(store) = store {
-                    if let Err(err) = commit_assembled(host, store, device) {
-                        log::error!("assemble persistence failed: {err}");
-                        rendered = Some(persist_error_line(&err));
-                    }
-                }
-            }
-            // The pair hears about a committed lifecycle only after the
-            // local commit stands (a V6012 answer owes the peer nothing).
-            if acked && rendered.is_none() {
-                pair_post_command(ha.as_deref_mut(), pair_notice, host);
-            }
-            match rendered {
-                Some(line) => Ok(line),
-                None => render_line(&response),
-            }
+            Ok(Executed::Command(Executing {
+                response,
+                commits,
+                advances,
+                pair_notice,
+            }))
         }
-        Err(command_err) => Ok(match parse_ha_command(line) {
+        Err(command_err) => Ok(Executed::Answer(match parse_ha_command(line) {
             Ok(ha_command) => match ha.as_mut() {
                 Some(backend) => match &mut **backend {
                     Ha::Shell(shell) => {
@@ -385,7 +385,75 @@ pub(crate) fn handle_line(
                 log::warn!("ignoring malformed command line: {err}");
                 codec_error_line(&err)
             }
-        }),
+        })),
+    }
+}
+
+/// Writes the response line of an executed command, after the scan boundary
+/// it awaited (if any) has passed.
+///
+/// An acknowledged `assembleEdits` with a `store` first persists the committed
+/// wire bytes (see [`persist_commit`]); a `None` store serves the honestly
+/// RAM-only session (no persistence). In pair mode, an acknowledged hot-edit
+/// command also owes the pair its ADR-0064 notice (see [`PairNotice`]).
+pub(crate) fn finish_line(
+    host: &mut RuntimeHost,
+    store: Option<&mut SlotStore>,
+    device: &mut Device,
+    ha: Option<&mut Ha>,
+    executing: Executing,
+) -> io::Result<String> {
+    let acked = matches!(executing.response, Response::Ack);
+    let mut rendered: Option<String> = None;
+    if acked && executing.commits {
+        // ADR-0064 amendment: persist before the line renders, so
+        // a failure answers V6012 instead of an ack.
+        if let Some(store) = store {
+            if let Err(err) = commit_assembled(host, store, device) {
+                log::error!("assemble persistence failed: {err}");
+                rendered = Some(persist_error_line(&err));
+            }
+        }
+    }
+    // The pair hears about a committed lifecycle only after the
+    // local commit stands (a V6012 answer owes the peer nothing).
+    if acked && rendered.is_none() {
+        pair_post_command(ha, executing.pair_notice, host);
+    }
+    match rendered {
+        Some(line) => Ok(line),
+        None => render_line(&executing.response),
+    }
+}
+
+/// Answers one command line with the session's single response line, driving
+/// the scan boundary a swap request awaits by itself.
+///
+/// This is the dispatch of the HA pair path ([`crate::ha_pair`]), whose pump
+/// has no scan loop yet: an acknowledged `testEdits`, `untestEdits` or
+/// `assembleEdits` drives one scan round after its acknowledgment, before the
+/// response line is written (see [`drive_scan_round`]).
+// Until the pair composes onto the device loop (stage 3d of the online-model
+// plan, ADR-0086): the loop executes the lines through `execute_line` and
+// `finish_line` and runs its own rounds, so no other path drives one.
+pub(crate) fn handle_line(
+    host: &mut RuntimeHost,
+    store: Option<&mut SlotStore>,
+    device: &mut Device,
+    mut ha: Option<&mut Ha>,
+    line: &str,
+) -> io::Result<String> {
+    match execute_line(host, device, ha.as_deref_mut(), line)? {
+        Executed::Answer(answer) => Ok(answer),
+        Executed::Command(executing) => {
+            if executing.awaits_boundary() {
+                if let Some(err) = drive_scan_round(host, ha.as_deref_mut()) {
+                    log::error!("driven scan round trapped: {err}");
+                }
+                device.scan_boundary(host);
+            }
+            finish_line(host, store, device, ha, executing)
+        }
     }
 }
 
@@ -596,49 +664,84 @@ fn advances_state(command: &Command) -> bool {
     )
 }
 
-/// Drives the one scan round that applies a swap acknowledged on the wire,
-/// at the constant-zero clock of the runtime acceptance tests (every task is
-/// ready immediately after a (re)load, so the boundary round runs each task
-/// exactly once).
-///
-/// With a composed HA backend, the driven boundary reports through the
-/// scan-commit seam: the epoch mint and the generations are the
-/// supervisor's answer to the boundary. Without one, the standalone
-/// composition only observes the boundary identity, as it always has.
-///
-/// Returns the trap as a [`VmError`] — its V-code is the trap's own — so the
-/// caller can surface it; a trapped round does not end the session. A
-/// violated host invariant keeps no V-code of its own (ADR-0055): it is
-/// logged here and reported as `None`.
-pub(crate) fn drive_scan_round(host: &mut RuntimeHost, mut ha: Option<&mut Ha>) -> Option<VmError> {
-    match host.run_with_commit(
-        1,
-        || 0,
-        |commit| match ha.as_deref_mut() {
-            Some(Ha::Shell(shell)) => shell.on_scan_commit(commit),
-            Some(Ha::Pair(link)) => link.on_scan_commit(commit),
-            None => log::debug!("scan boundary committed: {commit:?}"),
-        },
-    ) {
-        Ok(()) => None,
-        Err(RuntimeError::Trap(context)) => Some(VmError::from_trap(
-            &context.trap,
-            context.task_id,
-            context.instance_id,
-        )),
+/// What one scan round came to.
+pub(crate) enum RoundOutcome {
+    /// The round ran and its boundary committed.
+    Completed,
+    /// The host holds no execution permit (the HA shell demoted this unit, or
+    /// admission is not decided): nothing ran.
+    Refused,
+    /// The application trapped: the fault, with the task and the instance.
+    Trapped(FaultContext),
+    /// A host invariant was violated (logged; it has no V-code, ADR-0055).
+    Invariant,
+}
+
+/// Reads the result of a call of the host that drove one round.
+fn round_outcome(result: Result<(), RuntimeError>) -> RoundOutcome {
+    match result {
+        Ok(()) => RoundOutcome::Completed,
+        Err(RuntimeError::Trap(context)) => RoundOutcome::Trapped(context),
         Err(RuntimeError::NotPermitted) => {
             // The HA shell demoted this unit (a commanded swap made it the
             // Secondary, or the barrier was lost): the boundary refuses at
             // the permit latch — the composition is working, not broken.
             // The acknowledgment already stands; the rounds counter the
             // client reads back simply stops advancing.
-            log::error!("driven scan round refused: the host holds no execution permit");
-            None
+            log::error!("scan round refused: the host holds no execution permit");
+            RoundOutcome::Refused
         }
         Err(RuntimeError::Internal { reason }) => {
-            log::error!("runtime host invariant violated during a driven scan round: {reason}");
-            None
+            log::error!("runtime host invariant violated during a scan round: {reason}");
+            RoundOutcome::Invariant
         }
+    }
+}
+
+/// The scan-commit callback of a round: with a composed HA backend, the
+/// boundary reports through the scan-commit seam — the epoch mint and the
+/// generations are the supervisor's answer to the boundary. Without one, the
+/// standalone composition only observes the boundary identity, as it always has.
+fn notify_commit(ha: Option<&mut Ha>, commit: ScanCommit) {
+    match ha {
+        Some(Ha::Shell(shell)) => shell.on_scan_commit(commit),
+        Some(Ha::Pair(link)) => link.on_scan_commit(commit),
+        None => log::debug!("scan boundary committed: {commit:?}"),
+    }
+}
+
+/// Runs one round of the paced scan at `uptime_us`: the cyclic tasks keep the
+/// deadlines the previous round set (see [`RuntimeHost::run_paced_round`]). The
+/// round of the device loop.
+pub(crate) fn paced_round(
+    host: &mut RuntimeHost,
+    mut ha: Option<&mut Ha>,
+    uptime_us: u64,
+) -> RoundOutcome {
+    round_outcome(
+        host.run_paced_round(uptime_us, |commit| notify_commit(ha.as_deref_mut(), commit)),
+    )
+}
+
+/// Drives the one scan round that applies a swap acknowledged on the wire,
+/// at the constant-zero clock of the runtime acceptance tests (every task is
+/// ready immediately, so the boundary round runs each task exactly once).
+///
+/// Only the HA pair path calls this, until it composes onto the device loop
+/// (stage 3d of the online-model plan, ADR-0086); the loop's next round is the
+/// boundary of a swap.
+///
+/// Returns the trap as a [`VmError`] — its V-code is the trap's own — so the
+/// caller can surface it; a trapped round does not end the session.
+pub(crate) fn drive_scan_round(host: &mut RuntimeHost, mut ha: Option<&mut Ha>) -> Option<VmError> {
+    let result = host.run_with_commit(1, || 0, |commit| notify_commit(ha.as_deref_mut(), commit));
+    match round_outcome(result) {
+        RoundOutcome::Trapped(context) => Some(VmError::from_trap(
+            &context.trap,
+            context.task_id,
+            context.instance_id,
+        )),
+        RoundOutcome::Completed | RoundOutcome::Refused | RoundOutcome::Invariant => None,
     }
 }
 

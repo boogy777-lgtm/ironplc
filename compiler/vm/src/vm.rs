@@ -1,10 +1,9 @@
 use core::time::Duration;
 use ironplc_container::{
-    CharWidth, ConstantIndex, Container, FbTypeId, FunctionId, InstanceId, TaskId, TaskType,
-    VarIndex, STRING_HEADER_BYTES,
+    CharWidth, ConstantIndex, Container, FbTypeId, FunctionId, InstanceId, TaskId, VarIndex,
+    STRING_HEADER_BYTES,
 };
 
-use crate::buffers::VmBuffers;
 use crate::builtin;
 use crate::debug::PauseReason;
 use crate::debug_hook::{DebugHook, HookAction, NoopDebugHook};
@@ -12,7 +11,7 @@ use crate::error::Trap;
 use crate::frame_stack::{FbCallReturn, Frame, FrameStack};
 #[cfg(feature = "profiling")]
 use crate::profile::InstructionProfile;
-use crate::scheduler::{ProgramInstanceState, TaskScheduler, TaskState};
+use crate::scheduler::{earliest_due_us, ProgramInstanceState, TaskScheduler, TaskState};
 use crate::stack::OperandStack;
 use crate::stack_fmt::StackFmtBuf;
 use crate::str_to_num;
@@ -42,98 +41,6 @@ impl Vm {
     pub fn new() -> Self {
         Vm
     }
-
-    /// Loads a container, using caller-provided buffers for execution state.
-    ///
-    /// Populates task states and program instances from `container.task_table`.
-    /// Consumes the empty VM and returns a ready VM.
-    ///
-    /// Returns `Err(Trap)` if the container's declared call depth is invalid
-    /// or exceeds the frame buffer. The check runs here, before either entry
-    /// path ([`start`](VmReady::start) or [`resume`](VmReady::resume)), and
-    /// before any buffer is written. The error is a bare [`Trap`] rather than
-    /// a [`FaultContext`] because it belongs to the container, not to any
-    /// task or program instance.
-    pub fn load<'a>(
-        self,
-        container: &'a Container,
-        bufs: &'a mut VmBuffers,
-    ) -> Result<VmReady<'a>, Trap> {
-        validate_call_depth(container, bufs.frames.len())?;
-
-        // Populate task_states from the container's task table.
-        for (i, t) in container.task_table.tasks.iter().enumerate() {
-            if i < bufs.tasks.len() {
-                bufs.tasks[i] = TaskState {
-                    task_id: t.task_id,
-                    priority: t.priority,
-                    task_type: t.task_type,
-                    interval_us: t.interval_us,
-                    watchdog_us: t.watchdog_us,
-                    enabled: (t.flags & 0x01) != 0,
-                    next_due_us: 0,
-                    scan_count: 0,
-                    last_execute_us: 0,
-                    max_execute_us: 0,
-                    overrun_count: 0,
-                };
-            }
-        }
-
-        // Populate program_instances from the container's task table.
-        for (i, p) in container.task_table.programs.iter().enumerate() {
-            if i < bufs.programs.len() {
-                bufs.programs[i] = ProgramInstanceState {
-                    instance_id: p.instance_id,
-                    task_id: p.task_id,
-                    entry_function_id: p.entry_function_id,
-                    var_table_offset: p.var_table_offset,
-                    var_table_count: p.var_table_count,
-                    init_function_id: p.init_function_id,
-                };
-            }
-        }
-
-        let stack = OperandStack::new(&mut bufs.stack);
-        let variables = VariableTable::new(&mut bufs.vars);
-        let max_temp_buf_bytes = container.header.max_temp_buf_bytes as usize;
-
-        Ok(VmReady {
-            container,
-            stack,
-            variables,
-            data_region: &mut bufs.data_region,
-            temp_buf: &mut bufs.temp_buf,
-            max_temp_buf_bytes,
-            task_states: &mut bufs.tasks,
-            program_instances: &mut bufs.programs,
-            ready_buf: &mut bufs.ready,
-            frames: &mut bufs.frames,
-            #[cfg(feature = "profiling")]
-            profile: InstructionProfile::new(),
-        })
-    }
-}
-
-/// Validates a container's declared call depth against the embedder's
-/// frame-buffer capacity.
-///
-/// Codegen populates `max_call_depth` from the static call graph and always
-/// declares at least one frame (the entry function), so a value of 0 is
-/// invalid: it means the field was never computed (a legacy or hand-built
-/// container).
-fn validate_call_depth(container: &Container, capacity: usize) -> Result<(), Trap> {
-    let declared = container.header.max_call_depth;
-    if declared == 0 {
-        return Err(Trap::ZeroCallDepth);
-    }
-    if declared as usize > capacity {
-        return Err(Trap::ProgramExceedsCallDepth {
-            required: declared,
-            capacity: capacity.min(u16::MAX as usize) as u16,
-        });
-    }
-    Ok(())
 }
 
 impl Default for Vm {
@@ -732,11 +639,7 @@ impl<'a> VmRunning<'a> {
     /// Returns the earliest `next_due_us` across all enabled cyclic tasks,
     /// or `None` if no cyclic tasks exist (e.g. freewheeling only).
     pub fn next_due_us(&self) -> Option<u64> {
-        self.task_states
-            .iter()
-            .filter(|t| t.enabled && t.task_type == TaskType::Cyclic)
-            .map(|t| t.next_due_us)
-            .min()
+        earliest_due_us(self.task_states)
     }
 
     /// Requests the VM to stop after the current round.
@@ -3028,5 +2931,6 @@ fn read_i16_le(bytecode: &[u8], pc: &mut usize) -> Result<i16, Trap> {
     Ok(value)
 }
 
+mod load;
 #[cfg(test)]
 mod tests;

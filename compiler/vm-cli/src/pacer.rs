@@ -13,14 +13,23 @@
 //! - **No deadline** (`None`, a freewheeling-only program) means no wait: the
 //!   next round starts immediately.
 //! - **Stopping** is a stop flag (set from a signal handler) or a round limit.
+//! - **A wait that something may end**: the device loop waits for its next
+//!   deadline for a command to arrive, not for the deadline alone. Such a wait
+//!   is at most [`STOP_POLL_US`] long, so the stop flag is looked at at least
+//!   that often whatever the period of the tasks is.
 //!
 //! Drivers that do not pace do not use this: the benchmark runs rounds as
 //! fast as possible, the MCP runner uses simulated time, and the debug adapter
 //! steps on request.
 
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, TryRecvError};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
+/// The longest a wait that something may end lasts, in microseconds: the
+/// interval at which a waiting driver looks at the stop flag.
+pub const STOP_POLL_US: u64 = 50_000;
 
 /// The time source of a [`Pacer`]; small enough to fake in tests.
 pub trait Clock {
@@ -30,6 +39,13 @@ pub trait Clock {
     /// Blocks until [`uptime_us`](Clock::uptime_us) reaches `target_us`;
     /// returns at once when it already has.
     fn sleep_until_us(&mut self, target_us: u64);
+
+    /// Waits for a message on `rx` until [`uptime_us`](Clock::uptime_us)
+    /// reaches `target_us`: the message when one arrives first, else
+    /// [`RecvTimeoutError::Timeout`] at the time, or `Disconnected` when every
+    /// sender is gone. Returns at once when the time has already passed.
+    fn recv_until_us<T>(&mut self, target_us: u64, rx: &Receiver<T>)
+        -> Result<T, RecvTimeoutError>;
 }
 
 /// The wall clock: [`Instant`] for the uptime and a thread sleep for the wait.
@@ -57,6 +73,21 @@ impl Clock for SystemClock {
             std::thread::sleep(Duration::from_micros(sleep_us));
         }
     }
+
+    fn recv_until_us<T>(
+        &mut self,
+        target_us: u64,
+        rx: &Receiver<T>,
+    ) -> Result<T, RecvTimeoutError> {
+        let wait_us = target_us.saturating_sub(self.uptime_us());
+        rx.recv_timeout(Duration::from_micros(wait_us))
+    }
+}
+
+/// Whether a round is due at `uptime_us`: always for no deadline (`None`, a
+/// freewheeling-only program), else when the deadline has been reached.
+pub fn is_due(uptime_us: u64, next_due_us: Option<u64>) -> bool {
+    next_due_us.is_none_or(|due_us| uptime_us >= due_us)
 }
 
 /// Paces a free-running scan on a [`Clock`] until a stop flag is set or a
@@ -105,7 +136,41 @@ impl<C: Clock> Pacer<C> {
             }
         }
     }
+
+    /// Waits until `next_due_us` like [`wait_for`](Self::wait_for), but ends
+    /// the wait early with the message when one arrives on `rx`.
+    ///
+    /// `Err(Timeout)` means the wait is over without a message: the deadline
+    /// came, or the stop poll interval passed ([`STOP_POLL_US`]) and the
+    /// caller looks at its stop flag and asks again. No deadline (`None`) and
+    /// a deadline that has passed do not wait: a message that is already there
+    /// is returned, else `Timeout`.
+    pub fn wait_for_message<T>(
+        &mut self,
+        next_due_us: Option<u64>,
+        rx: &Receiver<T>,
+    ) -> Result<T, RecvTimeoutError> {
+        let now_us = self.clock.uptime_us();
+        match next_due_us {
+            Some(due_us) if due_us > now_us => self
+                .clock
+                .recv_until_us(due_us.min(now_us + STOP_POLL_US), rx),
+            _ => rx.try_recv().map_err(|err| match err {
+                TryRecvError::Empty => RecvTimeoutError::Timeout,
+                TryRecvError::Disconnected => RecvTimeoutError::Disconnected,
+            }),
+        }
+    }
+
+    /// Waits for a message while there is no round to wait for (the device is
+    /// not permitted to scan, or is faulted): at most the stop poll interval.
+    pub fn wait_idle<T>(&mut self, rx: &Receiver<T>) -> Result<T, RecvTimeoutError> {
+        let now_us = self.clock.uptime_us();
+        self.clock.recv_until_us(now_us + STOP_POLL_US, rx)
+    }
 }
 
+#[cfg(test)]
+pub(crate) mod test_clock;
 #[cfg(test)]
 mod tests;

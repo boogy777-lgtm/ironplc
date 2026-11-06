@@ -335,6 +335,30 @@ pub struct IdentityPayload {
     /// that keeps no retained image.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub retained: Option<BootNote>,
+    /// The fault of the application, present exactly while the device is
+    /// faulted: a scan round trapped, and the device runs no further round
+    /// until it is restarted. Every command is still answered. Absent from a
+    /// device that is not faulted and from a device that predates the field;
+    /// a client ignores what it does not know.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fault: Option<FaultNote>,
+}
+
+/// The trap that stopped the scan of a device: the stable V-code of the trap,
+/// its message, and where in the application it happened. The device fills it
+/// when a round traps; the host does not know it, because only a driver that
+/// runs rounds sees the trap.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FaultNote {
+    /// The V-code of the trap, for instance `"V4001"`.
+    pub v_code: String,
+    /// What happened, without the code.
+    pub message: String,
+    /// The task that was running.
+    pub task_id: u16,
+    /// The program instance that was running.
+    pub instance_id: u16,
 }
 
 /// What a device did at boot with one item it keeps across a restart: the
@@ -517,6 +541,7 @@ pub fn execute(command: Command, host: &mut RuntimeHost, device: &DeviceIdentity
             redundancy: None,
             persisted_content_hash: None,
             retained: None,
+            fault: None,
         })),
         Command::GetStatus => Response::Status(StatusPayload::from(host.status())),
         Command::AcceptEdits {

@@ -16,8 +16,9 @@ use ironplc_redundancy::Shell;
 use ironplc_runtime::{execute, parse_command, Command, Response, RuntimeHost};
 use spec_test_macro::spec_test;
 
+use crate::device_loop::scripted::serve_session;
 use crate::device_settings::device::Device;
-use crate::serve::{compose_host, drive_scan_round, serve_session};
+use crate::serve::{compose_host, drive_scan_round};
 use crate::slot_store::SlotStore;
 
 /// A `PROGRAM main` with one DINT `Counter` incremented by `step` per
@@ -337,7 +338,9 @@ fn serve_session_when_committed_then_rebooted_then_same_content_hash_and_restart
 /// REQ-VC-vm-cli-023: a trap in a driven round does not change the
 /// protocol answer (the swap was recorded, so the wire carries the ack);
 /// the trap surfaces with its V-code and the session keeps serving.
+/// REQ-VC-vm-cli-044: the trap is the fault `identity` reports.
 #[spec_test(REQ_VC_vm_cli_023)]
+#[spec_test(REQ_VC_vm_cli_044)]
 #[test]
 fn serve_session_when_driven_round_traps_then_ack_on_wire_and_session_continues() {
     let accept =
@@ -347,6 +350,7 @@ fn serve_session_when_driven_round_traps_then_ack_on_wire_and_session_continues(
         &accept,
         r#"{"command":"testEdits"}"#,
         r#"{"command":"getStatus"}"#,
+        r#"{"command":"identity"}"#,
     ];
     let mut host = counter_host();
 
@@ -359,6 +363,8 @@ fn serve_session_when_driven_round_traps_then_ack_on_wire_and_session_continues(
     // answers the next command.
     assert_eq!(responses[1]["response"], "ack");
     assert_eq!(responses[2]["response"], "status");
+    // And the device reports the fault.
+    assert_eq!(responses[3]["fault"]["vCode"], "V4001");
 }
 
 /// A slot store booted in a fresh temp dir beside a written counter

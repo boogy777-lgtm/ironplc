@@ -5,6 +5,7 @@ use std::process::ExitCode;
 use clap::Parser;
 
 mod cli;
+mod device_loop;
 mod device_settings;
 mod discovery;
 mod error;
