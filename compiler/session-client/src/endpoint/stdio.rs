@@ -13,7 +13,9 @@ use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+use ironplc_runtime::frame::CLOSE_LINGER;
 
 use super::Method;
 use crate::channel::{Channel, ChannelError};
@@ -72,6 +74,7 @@ impl Method for StdioEndpoint {
             stdin: Some(stdin),
             lines: read_lines_in_thread(stdout),
             stderr: keep_tail_in_thread(stderr),
+            is_closed: false,
         }))
     }
 }
@@ -128,6 +131,7 @@ struct StdioChannel {
     stdin: Option<ChildStdin>,
     lines: Receiver<std::io::Result<String>>,
     stderr: ErrorOutput,
+    is_closed: bool,
 }
 
 impl StdioChannel {
@@ -171,18 +175,47 @@ impl Channel for StdioChannel {
             Err(RecvTimeoutError::Disconnected) => Err(self.closed()),
         }
     }
-}
 
-impl Drop for StdioChannel {
-    fn drop(&mut self) {
-        // Closing the input ends a session that is waiting for its next
-        // command; the kill covers one that is not.
+    fn close(&mut self) {
+        if self.is_closed {
+            return;
+        }
+        self.is_closed = true;
+        // The same close as the `tcp` method, over a pipe: end the input, which
+        // is the end of the client's output, and wait for the program to end,
+        // which is the device letting go. A program that has not ended after
+        // `CLOSE_LINGER` is stopped. What it still writes is discarded, so that
+        // it is never blocked on a full pipe while it ends.
         self.stdin = None;
+        let deadline = Instant::now() + CLOSE_LINGER;
+        while Instant::now() < deadline {
+            match self.child.try_wait() {
+                Ok(Some(_)) | Err(_) => return,
+                Ok(None) => {}
+            }
+            // Waiting for output is the pause between two checks of the child.
+            if let Err(RecvTimeoutError::Disconnected) =
+                self.lines.recv_timeout(Duration::from_millis(1))
+            {
+                // Its output has ended with it: only its exit remains.
+                if let Err(err) = self.child.wait() {
+                    log::debug!("unable to wait for the session program: {err}");
+                }
+                return;
+            }
+        }
+        log::debug!("the session program did not end in time and is stopped");
         if let Err(err) = self.child.kill() {
             log::debug!("the session program had already ended: {err}");
         }
         if let Err(err) = self.child.wait() {
             log::debug!("unable to wait for the session program: {err}");
         }
+    }
+}
+
+impl Drop for StdioChannel {
+    fn drop(&mut self) {
+        self.close();
     }
 }

@@ -36,6 +36,16 @@ pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 /// one engineering session forever.
 pub const RESPONSE_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// The close linger: how long a side that closes a connection waits for its peer
+/// to finish and close too. The side that ends a framed connection ends its
+/// output, then reads and discards until the peer's end of input (or this long),
+/// and only then drops the socket: closing with input unread resets the
+/// connection and a reset discards what the peer has received and not yet read.
+/// A device waits this long for a client, and a client waits this long for the
+/// device to release its one engineering session (ADR-0065): the same value on
+/// both sides, defined once.
+pub const CLOSE_LINGER: Duration = Duration::from_secs(1);
+
 /// The payload of the io error a framing violation raises, so a session loop
 /// can tell a broken stream (the connection closes) apart from every other I/O
 /// failure.

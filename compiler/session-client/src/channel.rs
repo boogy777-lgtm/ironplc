@@ -31,4 +31,21 @@ pub trait Channel: Send {
     /// Receives the next JSON line, without its newline, waiting at most
     /// `timeout`.
     fn receive(&mut self, timeout: Duration) -> Result<String, ChannelError>;
+
+    /// Ends the connection gracefully and returns when the device has let go
+    /// of it, or after `CLOSE_LINGER` of `ironplc_runtime::frame` at the most.
+    ///
+    /// A device admits one session at a time and frees its slot when it sees
+    /// the end of the connection. A client that merely drops its end returns
+    /// at once, and the next connection can arrive before the device has
+    /// noticed, to be refused as busy (V6014). The close therefore ends the
+    /// client's output and waits for the device to end its own, which it does
+    /// only after it has freed the slot (see `serve_accepted` in
+    /// `compiler/vm-cli/src/tcp.rs`).
+    ///
+    /// Every member of the class implements it, so a method cannot be added
+    /// without saying how it closes, and it calls this from its `Drop`: a
+    /// channel that is dropped is closed, whoever holds it. Closing twice is
+    /// the same as closing once.
+    fn close(&mut self);
 }

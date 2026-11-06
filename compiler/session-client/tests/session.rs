@@ -11,9 +11,12 @@
 
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use ironplc_container::test_support::{container_bytes, steel_thread_debug_builder};
+use ironplc_runtime::frame::{read_frame, write_frame, CLOSE_LINGER};
 use ironplc_runtime::{Command, Response, SESSION_PROTOCOL_VERSION};
 use ironplc_session_client::{
     Endpoint, Phase, Session, SessionError, StdioEndpoint, TcpEndpoint, Timeouts,
@@ -247,4 +250,106 @@ fn session_when_a_socket_accepts_and_says_nothing_then_timed_out_in_the_identity
         Err(SessionError::TimedOut { phase: Phase::Identity, limit })
             if limit == timeouts.connect
     ));
+}
+
+/// How many sessions a device is opened and closed against, back to back, for
+/// each connection method. A process per session makes `stdio` slow, so it
+/// gets fewer; one lost race in a hundred would show in fifty.
+#[spec_test(REQ_SC_session_client_013)]
+#[rstest]
+#[case::stdio("stdio", 5)]
+#[case::tcp("tcp", 50)]
+fn session_when_opened_and_closed_back_to_back_then_every_one_succeeds(
+    #[case] method: &str,
+    #[case] count: usize,
+) {
+    let served = serve(method);
+
+    for round in 0..count {
+        let mut session = Session::connect(&served.endpoint)
+            .unwrap_or_else(|err| panic!("session {round} was not opened: {err:?}"));
+        assert!(matches!(
+            session.send(&Command::GetStatus),
+            Ok(Response::Status(_))
+        ));
+    }
+}
+
+#[spec_test(REQ_SC_session_client_013)]
+#[test]
+fn session_when_closed_then_the_device_has_released_it_for_the_next_connect() {
+    let served = serve_by_tcp();
+
+    drop(Session::connect(&served.endpoint).unwrap());
+    let next = Session::connect(&served.endpoint);
+
+    assert!(next.is_ok(), "{:?}", next.err());
+}
+
+#[spec_test(REQ_SC_session_client_013)]
+#[test]
+fn session_when_the_device_never_closes_then_the_close_ends_after_the_linger() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let endpoint = Endpoint::Tcp(TcpEndpoint {
+        address: "127.0.0.1".to_string(),
+        port: listener.local_addr().unwrap().port(),
+    });
+    // A device that answers `identity` and then holds the connection open.
+    let device = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        read_frame(&mut stream).unwrap();
+        write_frame(&mut stream, &identity_answer()).unwrap();
+        // Waits for the client to end its output, and keeps its own open.
+        assert_eq!(read_frame(&mut stream).unwrap(), None);
+        stream
+    });
+    let session = Session::connect(&endpoint).unwrap();
+
+    let started = Instant::now();
+    drop(session);
+    let waited = started.elapsed();
+
+    let _held_open = device.join().unwrap();
+    assert!(waited >= CLOSE_LINGER / 2, "returned after {waited:?}");
+    assert!(
+        waited < CLOSE_LINGER + Duration::from_secs(4),
+        "returned after {waited:?}"
+    );
+}
+
+#[spec_test(REQ_SC_session_client_013)]
+#[test]
+fn session_when_closed_then_it_returns_only_after_the_device_has_released_the_session() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let endpoint = Endpoint::Tcp(TcpEndpoint {
+        address: "127.0.0.1".to_string(),
+        port: listener.local_addr().unwrap().port(),
+    });
+    let released = Arc::new(AtomicBool::new(false));
+    // A device that takes its time between seeing the end of the session and
+    // releasing it, as a loaded one does, and closes its side only then.
+    let device = {
+        let released = Arc::clone(&released);
+        std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            read_frame(&mut stream).unwrap();
+            write_frame(&mut stream, &identity_answer()).unwrap();
+            assert_eq!(read_frame(&mut stream).unwrap(), None);
+            std::thread::sleep(Duration::from_millis(200));
+            released.store(true, Ordering::SeqCst);
+        })
+    };
+    let session = Session::connect(&endpoint).unwrap();
+
+    drop(session);
+
+    assert!(released.load(Ordering::SeqCst));
+    device.join().unwrap();
+}
+
+/// The answer of a device to `identity`.
+fn identity_answer() -> String {
+    format!(
+        r#"{{"response":"identity","protocol":{SESSION_PROTOCOL_VERSION},"device":{{"deviceId":"0123456789abcdef0123456789abcdef","name":"ironplcvm","model":"IronPLC SoftPLC","modification":"vm-cli","runtimeVersion":"0.247.0"}},"application":{{"mode":"normal","active":1,"normal":1,"candidate":null,"application":1,"migration":false,"rounds":0}}}}"#
+    )
 }

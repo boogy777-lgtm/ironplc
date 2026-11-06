@@ -27,11 +27,10 @@ use std::net::{IpAddr, Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use ironplc_redundancy::Shell;
 use ironplc_runtime::frame::{
-    is_framing_error, write_frame, FrameReader, FrameWriter, RESPONSE_TIMEOUT,
+    is_framing_error, write_frame, FrameReader, FrameWriter, CLOSE_LINGER, RESPONSE_TIMEOUT,
 };
 use ironplc_runtime::{RuntimeHost, DEFAULT_SESSION_PORT};
 
@@ -80,9 +79,6 @@ fn write_error_frame(stream: &mut TcpStream, v_code: &str, message: &str) -> io:
     .to_string();
     write_frame(stream, &line)
 }
-
-/// How long a closed connection waits for its peer to finish sending.
-const CLOSE_LINGER: Duration = Duration::from_secs(1);
 
 /// The most input a closing connection reads and discards.
 const CLOSE_DRAIN_LIMIT: usize = 1024 * 1024;
@@ -178,11 +174,19 @@ fn serve_accepted(
         }
         Err(err) => log::warn!("session with {peer} ended with an error: {err}"),
     }
-    // The next client may connect while the dropped one finishes its close.
+    // INVARIANT (the other site: `TcpChannel::close` in the session client,
+    // `compiler/session-client/src/endpoint/tcp.rs`): the occupied flag is
+    // released BEFORE the socket is dropped. The end of the connection that a
+    // client reads (EOF after its own close) therefore means the slot is free,
+    // and a client that closes gracefully and then connects again is never
+    // refused with V6014. Nothing between this store and the drop of `stream`
+    // may be moved above it. The next client may also connect while a dropped
+    // client finishes its close below.
     occupied.store(false, Ordering::SeqCst);
     if framing_answered {
         close_gracefully(&mut stream);
     }
+    drop(stream);
 }
 
 /// Reads the value of `--listen`: `IP:PORT`, or an IP address (v4 or v6) alone,

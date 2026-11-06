@@ -103,6 +103,22 @@ fn build_test_response_when_device_has_no_candidate_then_the_v_code_of_the_devic
     assert_eq!(cancel.v_code.as_deref(), Some("V4012"));
 }
 
+#[spec_test(REQ_TOL_mcp_175)]
+#[test]
+fn build_status_response_when_called_back_to_back_then_no_call_finds_the_device_busy() {
+    let (_device, resolved, _dir) = counter_device();
+
+    let responses: Vec<_> = (0..20).map(|_| build_status_response(&resolved)).collect();
+
+    for (call, response) in responses.iter().enumerate() {
+        assert!(
+            response.ok,
+            "call {call}: {:?} {:?}",
+            response.v_code, response.message
+        );
+    }
+}
+
 #[spec_test(REQ_TOL_mcp_172)]
 #[test]
 fn build_status_response_when_device_is_busy_then_v6014() {
