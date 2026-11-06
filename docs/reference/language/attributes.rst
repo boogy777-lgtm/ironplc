@@ -215,10 +215,10 @@ are declared, in consecutive entries of the variable table, with or without the
 attribute. So the attribute needs no other action.
 
 When the list changes, CODESYS allocates the whole list to a new memory area; an
-online change of IronPLC does not model this. The compiler has no memory for
-retained variables either: a :code:`RETAIN` variable
-of a list with the attribute is not stored apart from the other variables of the
-list. CODESYS stores all variables of the list in the retained memory then.
+online change of IronPLC does not model this. Nor does the attribute change
+what is retained: a :code:`RETAIN` variable of a list with the attribute is
+retained alone (see :doc:`/reference/language/variables/retention`), while
+CODESYS stores all variables of the list in the retained memory then.
 
 CODESYS reports a :code:`VAR_TEMP` block in a program with the attribute as an
 error, and so does the compiler
