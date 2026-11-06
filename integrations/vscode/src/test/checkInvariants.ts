@@ -4,6 +4,7 @@ import * as path from 'path';
 import { connectionTransports } from '../connectionMethods';
 import { SCAN_ACTIONS, scanActionNames } from '../controllerRunLogic';
 import { DOWNLOAD_ACTIONS, downloadActionNames } from '../downloadLogic';
+import { ACTION_HANDLERS, ACTION_KINDS, SHOW_ONLINE_COMPARISON } from '../onlineComparisonLogic';
 import { ONLINE_EDIT } from '../onlineEditLogic';
 import { DEFAULT_SESSION_PORT, SUPPORTED_SESSION_PROTOCOL } from '../sessionConstants';
 import { findGatewayViolations, HANDOFF_ACTIONS, handoffNames } from '../vscodeCommon';
@@ -102,6 +103,32 @@ for (const name of downloadActionNames()) {
   }
   if (!readme.includes(`**IronPLC: ${ONLINE_EDIT.title}**`)) {
     failures.push(`README.md does not name the command '${ONLINE_EDIT.title}' of the online edit dialog`);
+  }
+}
+
+// The command that shows the go-online comparison again is contributed with the
+// title the logic gives it and is named in the README; every action of the
+// comparison (the mirror's list) has one handler, and a handler that runs a
+// command names one that package.json contributes.
+{
+  const contributed = packageJson.contributes.commands.find((cmd: { command: string }) => cmd.command === SHOW_ONLINE_COMPARISON.commandId);
+  if (contributed === undefined) {
+    failures.push(`The online comparison names the command '${SHOW_ONLINE_COMPARISON.commandId}', which package.json does not contribute`);
+  }
+  else if (contributed.title !== SHOW_ONLINE_COMPARISON.title) {
+    failures.push(`The online comparison is titled '${SHOW_ONLINE_COMPARISON.title}', but package.json titles '${SHOW_ONLINE_COMPARISON.commandId}' '${contributed.title}'`);
+  }
+  if (!readme.includes(`**IronPLC: ${SHOW_ONLINE_COMPARISON.title}**`)) {
+    failures.push(`README.md does not name the command '${SHOW_ONLINE_COMPARISON.title}' of the online comparison`);
+  }
+  for (const kind of ACTION_KINDS) {
+    const handler = ACTION_HANDLERS[kind];
+    if (handler === undefined) {
+      failures.push(`The online action '${kind}' has no handler in ACTION_HANDLERS`);
+    }
+    else if (handler.kind === 'command' && !packageJson.contributes.commands.some((cmd: { command: string }) => cmd.command === handler.command)) {
+      failures.push(`The online action '${kind}' runs the command '${handler.command}', which package.json does not contribute`);
+    }
   }
 }
 

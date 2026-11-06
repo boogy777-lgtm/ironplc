@@ -111,6 +111,11 @@
         "category": "IronPLC"
       },
       {
+        "command": "ironplc.showOnlineComparison",
+        "title": "Show Online Comparison",
+        "category": "IronPLC"
+      },
+      {
         "command": "ironplc.runController",
         "title": "Run Controller",
         "category": "IronPLC"
