@@ -48,6 +48,7 @@ use crate::migration::{MigrationDecision, StateMigrationPlan};
 use crate::online_change::{
     has_stable_vars, swap_buffers, validate_candidate, validate_migration_candidate,
 };
+use crate::retained_state::{RetainedApplyError, RetainedImage};
 use crate::snapshot::StateSnapshot;
 
 /// Which artifact is executing.
@@ -153,6 +154,21 @@ pub struct HostStatus {
     pub content_hash: [u8; HASH_LEN],
     /// The `layout_hash` of the normal artifact's header, as the host loaded it.
     pub layout_hash: [u8; HASH_LEN],
+}
+
+/// The container whose code runs: the staged candidate while it is active,
+/// the normal artifact otherwise. A function of the fields, not of the host,
+/// so a caller can hold it while it borrows the buffers.
+fn select_active<'a>(
+    normal: &'a Container,
+    candidate: &'a Option<Container>,
+    active_is_candidate: bool,
+) -> &'a Container {
+    if active_is_candidate {
+        candidate.as_ref().unwrap_or(normal)
+    } else {
+        normal
+    }
 }
 
 /// Owns the active artifact, a staged candidate, and the VM's state.
@@ -418,12 +434,39 @@ impl RuntimeHost {
     /// data region (ADR-0073), stamped with the active artifact's layout
     /// identity.
     pub fn state_snapshot(&self) -> StateSnapshot {
-        let container = if self.active_is_candidate {
-            self.candidate.as_ref().unwrap_or(&self.normal)
-        } else {
-            &self.normal
-        };
-        StateSnapshot::of(container, &self.buffers)
+        StateSnapshot::of(self.active_container(), &self.buffers)
+    }
+
+    /// The container whose code runs and whose layout the buffers have.
+    fn active_container(&self) -> &Container {
+        select_active(&self.normal, &self.candidate, self.active_is_candidate)
+    }
+
+    /// The values of the retained variables of the active application
+    /// (ADR-0085), tagged with the container they were read from. The device
+    /// saves the encoded image at a controlled stop and at assemble.
+    pub fn retained_image(&self) -> RetainedImage {
+        RetainedImage::read(self.active_container(), &self.buffers)
+    }
+
+    /// The warm-start step: writes a saved retained image over the retained
+    /// variables, after [`new`](Self::new) has initialized the application and
+    /// before its first scan round, so the first round reads the saved values.
+    ///
+    /// The image is applied only to the container whose tag equals the
+    /// image's, otherwise [`RetainedApplyError::Mismatch`] names why and
+    /// nothing is written; a host that has run a round refuses with
+    /// [`RetainedApplyError::AfterFirstRound`], since the values would
+    /// overwrite live state. Variables that are not retained keep their
+    /// initial values.
+    pub fn apply_retained(&mut self, image: &RetainedImage) -> Result<(), RetainedApplyError> {
+        if self.rounds != 0 {
+            return Err(RetainedApplyError::AfterFirstRound);
+        }
+        let container = select_active(&self.normal, &self.candidate, self.active_is_candidate);
+        image
+            .apply(container, &mut self.buffers)
+            .map_err(RetainedApplyError::Mismatch)
     }
 
     /// Applies a replicated snapshot to this host while it drives no
@@ -469,11 +512,7 @@ impl RuntimeHost {
             return Err(OnlineChangeError::NotAllowedInThisMode);
         }
 
-        let active = if self.active_is_candidate {
-            self.candidate.as_ref().unwrap_or(&self.normal)
-        } else {
-            &self.normal
-        };
+        let active = select_active(&self.normal, &self.candidate, self.active_is_candidate);
         if snapshot.layout_matches(active) {
             return Self::copy_persistent(snapshot, active, &mut self.buffers);
         }

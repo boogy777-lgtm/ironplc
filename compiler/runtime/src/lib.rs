@@ -21,6 +21,7 @@ mod host;
 mod migration;
 mod online_change;
 mod persistent_state;
+mod retained_state;
 mod snapshot;
 
 // V-code constants are generated from resources/problem-codes.csv by build.rs.
@@ -41,5 +42,8 @@ pub use host::{
 pub use migration::{
     IdentitySide, IdentitySubject, MigrationDecision, MigrationError, StateMigrationPlan,
     TypeChangePair, UnidentifiedVariable,
+};
+pub use retained_state::{
+    RetainedApplyError, RetainedDecodeError, RetainedImage, RetainedMismatch, RetainedTag,
 };
 pub use snapshot::StateSnapshot;

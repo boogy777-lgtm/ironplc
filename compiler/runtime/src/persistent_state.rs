@@ -10,45 +10,120 @@
 //! its locals at every call and a function block copies its fields in and out
 //! of the data region around every call.
 //!
-//! A run that lies outside the buffers is skipped, never indexed. A container
+//! The walking is over [`Run`]s, not over extent rows, so that any other
+//! selection of the buffers (the retained runs, `retained_state`) is moved by
+//! the same code. A run that lies outside the buffers is skipped, never indexed. A container
 //! that passed the load check cannot declare one: the buffers are sized from
 //! the same header the check compares the rows against.
+
+use core::ops::Range;
 
 use ironplc_container::Container;
 use ironplc_vm::{Slot, VmBuffers};
 
-/// Copies the persistent state of `from` into `to`; both are laid out by
-/// `container`, or by containers that declare the same extent.
-pub(crate) fn carry(container: &Container, from: &VmBuffers, to: &mut VmBuffers) {
-    for row in container.persistent_extents() {
-        if let (Some(source), Some(target)) =
-            (from.vars.get(row.vars()), to.vars.get_mut(row.vars()))
-        {
+/// One run of a host's buffers: slots of the variable table and bytes of the
+/// data region. Either range may be empty. The persistent extents give runs
+/// with both; the retained runs of a container (ADR-0085) give one range
+/// each, so the two selections share the walking below and neither has a
+/// walker of its own.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Run {
+    pub(crate) vars: Range<usize>,
+    pub(crate) data: Range<usize>,
+}
+
+impl Run {
+    /// The number of slots in the runs, summed.
+    pub(crate) fn var_count(runs: &[Run]) -> usize {
+        runs.iter().map(|run| run.vars.len()).sum()
+    }
+
+    /// The number of bytes in the runs, summed.
+    pub(crate) fn data_bytes(runs: &[Run]) -> usize {
+        runs.iter().map(|run| run.data.len()).sum()
+    }
+}
+
+/// The persistent extents of `container` as runs.
+pub(crate) fn extent_runs(container: &Container) -> Vec<Run> {
+    container
+        .persistent_extents()
+        .iter()
+        .map(|row| Run {
+            vars: row.vars(),
+            data: row.data(),
+        })
+        .collect()
+}
+
+/// Copies the part of `from` that `runs` select into `to`.
+pub(crate) fn carry_runs(runs: &[Run], from: &VmBuffers, to: &mut VmBuffers) {
+    for run in runs {
+        if let (Some(source), Some(target)) = (
+            from.vars.get(run.vars.clone()),
+            to.vars.get_mut(run.vars.clone()),
+        ) {
             target.copy_from_slice(source);
         }
         if let (Some(source), Some(target)) = (
-            from.data_region.get(row.data()),
-            to.data_region.get_mut(row.data()),
+            from.data_region.get(run.data.clone()),
+            to.data_region.get_mut(run.data.clone()),
         ) {
             target.copy_from_slice(source);
         }
     }
 }
 
-/// The persistent slots as raw bits and the persistent bytes of the data
-/// region of `buffers`, each concatenated in extent order.
-pub(crate) fn read(container: &Container, buffers: &VmBuffers) -> (Vec<u64>, Vec<u8>) {
+/// The slots as raw bits and the bytes of the data region of `buffers` that
+/// `runs` select, each concatenated in run order.
+pub(crate) fn read_runs(runs: &[Run], buffers: &VmBuffers) -> (Vec<u64>, Vec<u8>) {
     let mut vars = Vec::new();
     let mut data = Vec::new();
-    for row in container.persistent_extents() {
-        if let Some(slots) = buffers.vars.get(row.vars()) {
+    for run in runs {
+        if let Some(slots) = buffers.vars.get(run.vars.clone()) {
             vars.extend(slots.iter().map(|slot| slot.as_u64()));
         }
-        if let Some(bytes) = buffers.data_region.get(row.data()) {
+        if let Some(bytes) = buffers.data_region.get(run.data.clone()) {
             data.extend_from_slice(bytes);
         }
     }
     (vars, data)
+}
+
+/// Writes an image made by [`read_runs`] over the part of `buffers` that
+/// `runs` select. Returns `false`, having written nothing, when the image does
+/// not have the lengths the runs give.
+pub(crate) fn write_runs(runs: &[Run], vars: &[u64], data: &[u8], buffers: &mut VmBuffers) -> bool {
+    if vars.len() != Run::var_count(runs) || data.len() != Run::data_bytes(runs) {
+        return false;
+    }
+    let (mut vars, mut data) = (vars, data);
+    for run in runs {
+        let (var_head, var_rest) = vars.split_at(run.vars.len());
+        let (data_head, data_rest) = data.split_at(run.data.len());
+        (vars, data) = (var_rest, data_rest);
+        if let Some(slots) = buffers.vars.get_mut(run.vars.clone()) {
+            for (slot, raw) in slots.iter_mut().zip(var_head) {
+                *slot = Slot::from_u64(*raw);
+            }
+        }
+        if let Some(bytes) = buffers.data_region.get_mut(run.data.clone()) {
+            bytes.copy_from_slice(data_head);
+        }
+    }
+    true
+}
+
+/// Copies the persistent state of `from` into `to`; both are laid out by
+/// `container`, or by containers that declare the same extent.
+pub(crate) fn carry(container: &Container, from: &VmBuffers, to: &mut VmBuffers) {
+    carry_runs(&extent_runs(container), from, to);
+}
+
+/// The persistent slots as raw bits and the persistent bytes of the data
+/// region of `buffers`, each concatenated in extent order.
+pub(crate) fn read(container: &Container, buffers: &VmBuffers) -> (Vec<u64>, Vec<u8>) {
+    read_runs(&extent_runs(container), buffers)
 }
 
 /// Writes an image made by [`read`] over the persistent state of `buffers`.
@@ -60,26 +135,7 @@ pub(crate) fn write(
     data: &[u8],
     buffers: &mut VmBuffers,
 ) -> bool {
-    if vars.len() != container.persistent_var_count()
-        || data.len() != container.persistent_data_bytes()
-    {
-        return false;
-    }
-    let (mut vars, mut data) = (vars, data);
-    for row in container.persistent_extents() {
-        let (var_head, var_rest) = vars.split_at(usize::from(row.var_count));
-        let (data_head, data_rest) = data.split_at(row.data_len as usize);
-        (vars, data) = (var_rest, data_rest);
-        if let Some(slots) = buffers.vars.get_mut(row.vars()) {
-            for (slot, raw) in slots.iter_mut().zip(var_head) {
-                *slot = Slot::from_u64(*raw);
-            }
-        }
-        if let Some(bytes) = buffers.data_region.get_mut(row.data()) {
-            bytes.copy_from_slice(data_head);
-        }
-    }
-    true
+    write_runs(&extent_runs(container), vars, data, buffers)
 }
 
 #[cfg(test)]

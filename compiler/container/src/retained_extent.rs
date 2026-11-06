@@ -191,6 +191,26 @@ impl Container {
             .map(|section| section.retained_runs.clone())
             .unwrap_or_default()
     }
+
+    /// The hash of the retained runs: BLAKE3 over the number of rows (u32
+    /// LE), then each row in its serialized form, in the order
+    /// [`retained_runs`](Self::retained_runs) gives them.
+    ///
+    /// It says which slots and bytes are retained and of which kind, and
+    /// nothing else: two containers with equal hashes lay out a retained
+    /// image the same way. The retained rows are in the content hash but not
+    /// in `layout_hash` (ADR-0085, D4), so the file that stores a retained
+    /// image tags it with this hash beside the content hash. This is the one
+    /// place that computes it.
+    pub fn retained_runs_hash(&self) -> [u8; 32] {
+        let runs = self.retained_runs();
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(&(runs.len() as u32).to_le_bytes());
+        for run in &runs {
+            hasher.update(&run.to_bytes());
+        }
+        *hasher.finalize().as_bytes()
+    }
 }
 
 #[cfg(test)]
@@ -277,5 +297,44 @@ mod tests {
         ];
 
         assert_eq!(canonical_runs(runs.clone()), runs);
+    }
+
+    fn container_with(runs: &[RetainedRun]) -> Container {
+        let mut builder = crate::ContainerBuilder::new()
+            .num_variables(4)
+            .data_region_bytes(16);
+        for run in runs {
+            builder = builder.add_retained_run(*run);
+        }
+        builder.build()
+    }
+
+    #[test]
+    fn retained_runs_hash_when_same_runs_then_equal() {
+        let runs = [RetainedRun::slots(RetainKind::Retain, 1, 2)];
+
+        assert_eq!(
+            container_with(&runs).retained_runs_hash(),
+            container_with(&runs).retained_runs_hash()
+        );
+    }
+
+    #[test]
+    fn retained_runs_hash_when_kind_or_run_differs_then_differs() {
+        let retain = container_with(&[RetainedRun::slots(RetainKind::Retain, 1, 2)]);
+        let persistent = container_with(&[RetainedRun::slots(RetainKind::Persistent, 1, 2)]);
+        let moved = container_with(&[RetainedRun::slots(RetainKind::Retain, 2, 2)]);
+        let none = container_with(&[]);
+
+        let hashes = [
+            retain.retained_runs_hash(),
+            persistent.retained_runs_hash(),
+            moved.retained_runs_hash(),
+            none.retained_runs_hash(),
+        ];
+
+        for (index, hash) in hashes.iter().enumerate() {
+            assert!(hashes[index + 1..].iter().all(|other| other != hash));
+        }
     }
 }

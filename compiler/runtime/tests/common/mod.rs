@@ -28,6 +28,12 @@ pub fn compile_source(source: &str) -> Container {
     compile_container(source, &[], &CompilerOptions::default())
 }
 
+/// Compiles `source` with `options` and round-trips the container through the
+/// wire format.
+pub fn compile_with_options(source: &str, options: &CompilerOptions) -> Container {
+    compile_container(source, &[], options)
+}
+
 /// Compiles `source` with the given engineering-side program-variable
 /// `(name, uid)` table and round-trips the container through the wire
 /// format. The scope is the conventional program name of these fixtures;
