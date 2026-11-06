@@ -4,7 +4,7 @@
 //! the second channel through the I/O daisy-chain binds later). The
 //! packet carries the field list of the FSM spec — pair id, role, epoch,
 //! generations, per-channel ping/pong sequences, `io_owner_state`, and a
-//! CRC — as a fixed 38-byte frame; the binary cyclic encoding is a codec
+//! CRC — as a fixed 42-byte frame; the binary cyclic encoding is a codec
 //! detail here, not a framework (the architecture doc, "Deliberately Not
 //! Built").
 //!
@@ -91,7 +91,7 @@ pub struct Packet {
 }
 
 /// Wire size of one ping/pong frame, bytes.
-pub const FRAME_LEN: usize = 38;
+pub const FRAME_LEN: usize = 42;
 
 /// The `io_owner_state` byte is reserved until the CONTROL chart exists;
 /// v1 pair links always carry 0 (CONTROL is not on the link yet).
@@ -104,25 +104,27 @@ impl Packet {
         let mut frame = [0u8; FRAME_LEN];
         frame[0..8].copy_from_slice(&self.pair_id.raw().to_be_bytes());
         frame[8] = self.role.as_byte();
-        frame[9..13].copy_from_slice(&self.epoch.raw().to_be_bytes());
-        frame[13..17].copy_from_slice(&self.generation.to_be_bytes());
-        frame[17..25].copy_from_slice(&self.ping_seq.to_be_bytes());
-        frame[25..33].copy_from_slice(&self.pong_seq.to_be_bytes());
-        frame[33] = IO_OWNER_STATE_RESERVED;
-        let crc = crc32(&frame[..34]);
-        frame[34..38].copy_from_slice(&crc.to_be_bytes());
+        frame[9..17].copy_from_slice(&self.epoch.raw().to_be_bytes());
+        frame[17..21].copy_from_slice(&self.generation.to_be_bytes());
+        frame[21..29].copy_from_slice(&self.ping_seq.to_be_bytes());
+        frame[29..37].copy_from_slice(&self.pong_seq.to_be_bytes());
+        frame[37] = IO_OWNER_STATE_RESERVED;
+        let crc = crc32(&frame[..38]);
+        frame[38..42].copy_from_slice(&crc.to_be_bytes());
         frame
     }
 
     /// Parses one wire frame; `None` for a wrong length, a failed CRC, or
     /// an unknown role byte — a corrupted or foreign frame is dropped,
-    /// never acted on.
+    /// never acted on. A frame of the earlier 38-byte layout (32-bit
+    /// epoch) fails the length check: mixed layouts in one pair are not
+    /// supported.
     pub fn decode(frame: &[u8]) -> Option<Self> {
         if frame.len() != FRAME_LEN {
             return None;
         }
-        let crc = u32::from_be_bytes([frame[34], frame[35], frame[36], frame[37]]);
-        if crc32(&frame[..34]) != crc {
+        let crc = u32::from_be_bytes([frame[38], frame[39], frame[40], frame[41]]);
+        if crc32(&frame[..38]) != crc {
             return None;
         }
         let role = PairRole::from_byte(frame[8])?;
@@ -131,17 +133,18 @@ impl Packet {
                 frame[0], frame[1], frame[2], frame[3], frame[4], frame[5], frame[6], frame[7],
             ])),
             role,
-            epoch: Epoch::new(u32::from_be_bytes([
-                frame[9], frame[10], frame[11], frame[12],
+            epoch: Epoch::new(u64::from_be_bytes([
+                frame[9], frame[10], frame[11], frame[12], frame[13], frame[14], frame[15],
+                frame[16],
             ])),
-            generation: u32::from_be_bytes([frame[13], frame[14], frame[15], frame[16]]),
+            generation: u32::from_be_bytes([frame[17], frame[18], frame[19], frame[20]]),
             ping_seq: u64::from_be_bytes([
-                frame[17], frame[18], frame[19], frame[20], frame[21], frame[22], frame[23],
-                frame[24],
+                frame[21], frame[22], frame[23], frame[24], frame[25], frame[26], frame[27],
+                frame[28],
             ]),
             pong_seq: u64::from_be_bytes([
-                frame[25], frame[26], frame[27], frame[28], frame[29], frame[30], frame[31],
-                frame[32],
+                frame[29], frame[30], frame[31], frame[32], frame[33], frame[34], frame[35],
+                frame[36],
             ]),
         })
     }
@@ -332,7 +335,7 @@ mod tests {
         let packet = Packet {
             pair_id: PairId::new(0x0102_0304_0506_0708),
             role: PairRole::Secondary,
-            epoch: Epoch::new(0x0A0B_0C0D),
+            epoch: Epoch::new(0x0A0B_0C0D_0E0F_1011),
             generation: 0x1121_3141,
             ping_seq: 0x0102_0304_0506_0708,
             pong_seq: 0x1112_1314_1516_1718,
@@ -341,6 +344,28 @@ mod tests {
         let decoded = Packet::decode(&packet.encode());
 
         assert_eq!(decoded, Some(packet));
+    }
+
+    #[test]
+    fn encode_when_epoch_above_u32_max_then_decodes_the_full_width() {
+        let mut packet = packet(1, 1);
+        packet.epoch = Epoch::new(u64::from(u32::MAX) + 7);
+
+        let decoded = Packet::decode(&packet.encode()).expect("frame decodes");
+
+        assert_eq!(decoded.epoch, Epoch::new(u64::from(u32::MAX) + 7));
+    }
+
+    #[test]
+    fn decode_when_frame_has_the_earlier_38_byte_layout_then_rejected() {
+        // The 32-bit-epoch layout: same fields, 4 epoch bytes, valid CRC.
+        let mut old = [0u8; 38];
+        old[7] = 9;
+        old[12] = 4;
+        let crc = crc32(&old[..34]);
+        old[34..38].copy_from_slice(&crc.to_be_bytes());
+
+        assert_eq!(Packet::decode(&old), None);
     }
 
     #[test]
@@ -355,12 +380,12 @@ mod tests {
             [
                 0, 0, 0, 0, 0, 0, 0, 9, // pair_id
                 0, // role: Primary
-                0, 0, 0, 4, // epoch
+                0, 0, 0, 0, 0, 0, 0, 4, // epoch
                 0, 0, 0, 2, // generation
                 1, 2, 3, 4, 5, 6, 7, 8, // ping_seq
                 17, 18, 19, 20, 21, 22, 23, 24, // pong_seq
                 0,  // io_owner_state (reserved)
-                121, 119, 138, 3, // crc32
+                117, 41, 30, 8, // crc32
             ]
         );
     }
@@ -384,7 +409,7 @@ mod tests {
     #[test]
     fn decode_when_wrong_length_then_rejected() {
         assert_eq!(Packet::decode(&[0; 10]), None);
-        assert_eq!(Packet::decode(&[0; 39]), None);
+        assert_eq!(Packet::decode(&[0; 43]), None);
     }
 
     #[test]

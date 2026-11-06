@@ -16,22 +16,31 @@
 
 use core::fmt;
 
+use serde::Serialize;
+
 /// The ownership/fencing epoch of a redundant pair.
 ///
 /// `Epoch(0)` is the un-set value of a unit that has not committed an
 /// epoch (a fresh boot, or a Secondary that has not adopted its peer's):
 /// any live peer epoch is newer, so adoption always succeeds from boot.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Epoch(u32);
+///
+/// The epoch is 64 bits (ADR-0062 amendment): one epoch is minted per
+/// committed scan round, and a freewheeling scan would saturate 32 bits
+/// in about twenty minutes. This is the only place the width is decided;
+/// every field that carries an epoch holds an `Epoch` (or, across a
+/// crate boundary that may not depend on this one, a `u64`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[serde(transparent)]
+pub struct Epoch(u64);
 
 impl Epoch {
     /// Creates an epoch from its raw value.
-    pub const fn new(raw: u32) -> Self {
+    pub const fn new(raw: u64) -> Self {
         Self(raw)
     }
 
     /// Returns the raw value.
-    pub const fn raw(self) -> u32 {
+    pub const fn raw(self) -> u64 {
         self.0
     }
 
@@ -93,6 +102,18 @@ mod tests {
     }
 
     #[test]
+    fn next_when_epoch_is_past_u32_max_then_advances_by_one() {
+        let past = Epoch::new(u64::from(u32::MAX) + 1);
+
+        assert_eq!(past.next(), Epoch::new(u64::from(u32::MAX) + 2));
+    }
+
+    #[test]
+    fn next_when_epoch_is_max_then_saturates() {
+        assert_eq!(Epoch::new(u64::MAX).next(), Epoch::new(u64::MAX));
+    }
+
+    #[test]
     fn adopt_when_peer_newer_then_adopts() {
         let mut epoch = Epoch::new(3);
 
@@ -122,6 +143,13 @@ mod tests {
 
         assert_eq!(epoch.adopt(Epoch::new(1)), EpochAdoption::Adopted);
         assert_eq!(epoch, Epoch::new(1));
+    }
+
+    #[test]
+    fn serialize_when_epoch_above_u32_max_then_json_carries_the_full_value() {
+        let json = serde_json::to_string(&Epoch::new(u64::from(u32::MAX) + 9)).unwrap();
+
+        assert_eq!(json, "4294967304");
     }
 
     #[test]

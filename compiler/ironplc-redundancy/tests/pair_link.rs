@@ -160,7 +160,7 @@ fn pair_link_when_primary_and_secondary_boot_then_both_converge_to_sync_ready() 
     // same step; every committed round minted exactly one epoch through
     // the scan-commit callback.
     assert_eq!(a.host_rounds(), 6);
-    assert_eq!(a.epoch().raw(), a.host_rounds() as u32);
+    assert_eq!(a.epoch().raw(), a.host_rounds());
     // The peer tracks the owner but is never ahead of it (anti-stale).
     assert!(b.epoch().raw() > 0);
     assert!(b.epoch().raw() < a.epoch().raw());

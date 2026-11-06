@@ -58,6 +58,43 @@ mod tests {
     }
 
     #[test]
+    fn pair_link_status_when_epoch_above_u32_max_then_json_carries_the_full_value() {
+        use crate::epoch::Epoch;
+        use crate::liveness::PairRole;
+        use crate::pair_link::{PairLinkStatus, PairPeerStatus};
+        use crate::statechart::{CrossloadReadiness, DeSyncReason};
+
+        let local = u64::from(u32::MAX) + 3;
+        let peer = u64::from(u32::MAX) + 2;
+        let status = PairLinkStatus {
+            pair_id: crate::config::PairId::new(7),
+            role: PairRole::Primary,
+            configured_role: ConfiguredRole::Primary,
+            admitted: None,
+            sync: SyncState::SyncReady,
+            sync_reason: DeSyncReason::Boot,
+            epoch: Epoch::new(local),
+            readiness: CrossloadReadiness::Complete,
+            alarm: None,
+            link_valid: true,
+            peer: Some(PairPeerStatus {
+                role: PairRole::Secondary,
+                epoch: Epoch::new(peer),
+                generation: 1,
+                live: true,
+            }),
+            application_generation: 1,
+            state_generation: 1,
+        };
+
+        let json = render(&HaResponse::HaStatus(Box::new(pair_link_status(&status))));
+
+        assert_eq!(json["epoch"].as_u64(), Some(local));
+        assert_eq!(json["local"]["epoch"].as_u64(), Some(local));
+        assert_eq!(json["peer"]["epoch"].as_u64(), Some(peer));
+    }
+
+    #[test]
     fn parse_when_status_query_then_matching_variant() {
         assert_eq!(
             parse_ha_command(r#"{"command":"haStatus"}"#).unwrap(),

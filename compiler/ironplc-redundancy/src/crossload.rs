@@ -14,7 +14,7 @@
 //! answers `Refused`: it never pretends redundancy-ready.
 //!
 //! The wire is one CRC-guarded frame per message, demuxed from the
-//! fixed 38-byte ping/pong frames by magic and length — a codec detail
+//! fixed 42-byte ping/pong frames by magic and length — a codec detail
 //! of this module, not a framework (the architecture doc, "Deliberately
 //! Not Built"). A frame that fails any check decodes as `None`: a
 //! garbled transfer is dropped, never acted on; the session reports the
@@ -37,7 +37,7 @@ use crate::problem_codes;
 use crate::statechart::CrossloadReadiness;
 
 /// The two magic bytes every crossload frame starts with; they demux the
-/// variable-length crossload frames from the fixed 38-byte ping/pong
+/// variable-length crossload frames from the fixed 42-byte ping/pong
 /// frames on the same port.
 pub const FRAME_MAGIC: [u8; 2] = [0xC7, 0x1C];
 
@@ -46,7 +46,10 @@ const MAGIC: [u8; 2] = FRAME_MAGIC;
 /// The frame format version this codec encodes. Version 2 carries the
 /// persistent extent of the state only (ADR-0073): the counts of a snapshot
 /// are the counts of persistent variables and persistent data bytes.
-const VERSION: u8 = 2;
+/// Version 3 widens the offer's epoch to 8 bytes (ADR-0062 amendment). A
+/// frame of any other version fails the version check and is dropped:
+/// mixed versions in one pair are not supported.
+const VERSION: u8 = 3;
 
 /// Wire discriminant of a [`CrossloadMessage`].
 const KIND_OFFER: u8 = 0;
@@ -281,15 +284,15 @@ pub fn decode(frame: &[u8]) -> Option<CrossloadMessage> {
     }
 }
 
-/// The offer payload after the 4-byte header: the 16-byte identity
-/// block (pair id, epoch, generation), the wire length, the shared
+/// The offer payload after the 4-byte header: the 20-byte identity
+/// block (pair id 8, epoch 8, generation 4), the wire length, the shared
 /// snapshot block, then the candidate wire bytes.
-const OFFER_PREFIX_LEN: usize = 20 + SNAPSHOT_PREFIX_LEN;
+const OFFER_PREFIX_LEN: usize = 24 + SNAPSHOT_PREFIX_LEN;
 
 fn decode_offer(body: &[u8]) -> Option<CrossloadMessage> {
     let prefix = body.get(..OFFER_PREFIX_LEN)?;
-    let wire_len = u32::from_be_bytes(prefix.get(16..20)?.try_into().ok()?) as usize;
-    let snapshot_prefix = prefix.get(20..OFFER_PREFIX_LEN)?;
+    let wire_len = u32::from_be_bytes(prefix.get(20..24)?.try_into().ok()?) as usize;
+    let snapshot_prefix = prefix.get(24..OFFER_PREFIX_LEN)?;
     let payload = body.get(OFFER_PREFIX_LEN..)?;
     // The snapshot prefix already pins the slot byte length; the
     // remaining payload after the wire bytes must be exactly the slot
@@ -300,8 +303,8 @@ fn decode_offer(body: &[u8]) -> Option<CrossloadMessage> {
     }
     Some(CrossloadMessage::Offer(CrossloadOffer {
         pair_id: PairId::new(u64::from_be_bytes(prefix.get(..8)?.try_into().ok()?)),
-        epoch: Epoch::new(u32::from_be_bytes(prefix.get(8..12)?.try_into().ok()?)),
-        generation: LogicGeneration::new(u32::from_be_bytes(prefix.get(12..16)?.try_into().ok()?)),
+        epoch: Epoch::new(u64::from_be_bytes(prefix.get(8..16)?.try_into().ok()?)),
+        generation: LogicGeneration::new(u32::from_be_bytes(prefix.get(16..20)?.try_into().ok()?)),
         candidate_wire: payload[..wire_len].to_vec(),
         snapshot,
     }))
@@ -622,6 +625,23 @@ mod tests {
     }
 
     #[test]
+    fn decode_when_offer_epoch_above_u32_max_then_full_width_survives() {
+        let mut wide = offer();
+        wide.epoch = Epoch::new(u64::from(u32::MAX) + 5);
+
+        assert_round_trip(&CrossloadMessage::Offer(wide));
+    }
+
+    #[test]
+    fn decode_when_version_is_the_earlier_32_bit_epoch_layout_then_rejected() {
+        let mut frame = encode(&CrossloadMessage::Offer(offer()));
+        frame[2] = VERSION - 1;
+        reseal(&mut frame);
+
+        assert_eq!(decode(&frame), None);
+    }
+
+    #[test]
     fn decode_when_crc_corrupted_then_rejected() {
         let mut frame = encode(&CrossloadMessage::Offer(offer()));
         let last = frame.len() - 1;
@@ -665,8 +685,8 @@ mod tests {
         // the frame so the CRC check cannot catch it first: the slot
         // blob length is pinned to the variable count, so the remaining
         // bytes cannot split into the declared data region.
-        message[24] = 0x00;
-        message[25] = 0x03;
+        message[28] = 0x00;
+        message[29] = 0x03;
         reseal(&mut message);
 
         assert_eq!(decode(&message), None);

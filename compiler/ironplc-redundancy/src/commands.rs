@@ -20,6 +20,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::calibration::BudgetVerdict;
+use crate::epoch::Epoch;
 use crate::fencing::ModuleState;
 use crate::pair_link::PairLinkStatus;
 use crate::problem_codes;
@@ -122,7 +123,7 @@ pub struct UnitPayload {
     #[serde(skip_serializing_if = "Option::is_none")]
     alarm: Option<&'static str>,
     /// The unit's current epoch.
-    epoch: u32,
+    epoch: Epoch,
 }
 
 /// The active alarm flags of the pair (ha-engineering-ui.md, haStatus).
@@ -156,7 +157,7 @@ pub struct HaStatusPayload {
     peer: Option<UnitPayload>,
     /// The pair's current epoch; `None` standalone.
     #[serde(skip_serializing_if = "Option::is_none")]
-    epoch: Option<u32>,
+    epoch: Option<Epoch>,
     /// The application generation (the committed manifest).
     application_generation: u32,
     /// The committed state generation (the host's boundary counter).
@@ -263,7 +264,7 @@ pub struct ModuleBarrierPayload {
     owner: Option<u64>,
     /// The ownership epoch stamped on the module, if held.
     #[serde(skip_serializing_if = "Option::is_none")]
-    owner_epoch: Option<u32>,
+    owner_epoch: Option<Epoch>,
     /// Whether the holder commands the module's outputs.
     owner_armed: bool,
     /// The claim latency (`T_claim,i`; the barrier claims sequentially).
@@ -575,7 +576,7 @@ fn status_payload(shell: &Shell) -> HaStatusPayload {
         epoch: if standalone {
             None
         } else {
-            Some(shell.epoch().raw())
+            Some(shell.epoch())
         },
         application_generation: shell.application_generation(),
         state_generation: shell.state_generation(),
@@ -612,7 +613,7 @@ pub fn pair_link_status(status: &PairLinkStatus) -> HaStatusPayload {
         sync_reason: None,
         control: None,
         alarm: None,
-        epoch: view.epoch.raw(),
+        epoch: view.epoch,
     });
     HaStatusPayload {
         standalone: false,
@@ -624,10 +625,10 @@ pub fn pair_link_status(status: &PairLinkStatus) -> HaStatusPayload {
             sync_reason: Some(status.sync_reason.as_str()),
             control: None,
             alarm: None,
-            epoch: status.epoch.raw(),
+            epoch: status.epoch,
         },
         peer,
-        epoch: Some(status.epoch.raw()),
+        epoch: Some(status.epoch),
         application_generation: status.application_generation,
         state_generation: status.state_generation,
         takeover_ready: false,
@@ -670,7 +671,7 @@ fn unit_payload(shell: &Shell, side: Side) -> UnitPayload {
             view.map(|u| u.control.as_str())
         },
         alarm: view.and_then(|u| u.alarm.map(|alarm| alarm.as_str())),
-        epoch: view.map_or(0, |u| u.epoch.raw()),
+        epoch: view.map_or(Epoch::new(0), |u| u.epoch),
     }
 }
 
@@ -723,7 +724,7 @@ fn barrier_payload(shell: &Shell) -> HaBarrierPayload {
                 online: shell.module_online(*module),
                 owner_state: state.as_str(),
                 owner: state.owner().map(|owner| owner.raw()),
-                owner_epoch: state.epoch().map(|epoch| epoch.raw()),
+                owner_epoch: state.epoch(),
                 owner_armed: state.is_armed(),
                 claim: term(contribution.map(|c| c.claim())),
                 arm: term(contribution.map(|c| c.arm())),
