@@ -8,7 +8,10 @@
  * (ADR-0065). This module is the glue: it owns the vscode objects (status
  * bar, QuickPick, output channel, `SecretStorage`) and
  * renders what the vscode-free logic decides; the device panel and the
- * build commands subscribe to the model it publishes.
+ * build commands subscribe to the model it publishes. When a session opens (or
+ * a connection fails) it asks the compiler for the go-online comparison
+ * (`ironplcc online-compare`, ADR-0089) and publishes it: the status line
+ * follows it, and the dialog opens unless the application is up to date.
  */
 
 import * as vscode from 'vscode';
@@ -47,16 +50,23 @@ import { accessIronLink } from './ironlinkAccess';
 import { statusCommand, statusText, statusTooltip } from './statusBarLogic';
 import {
   ConnectionManager,
+  IdentityCause,
   OpenedConnection,
 } from './connectionState';
 import {
-  BaselineState,
   FolderRef,
   planDownload,
-  readBaseline,
   RunCompiler,
   writeDownloadRecord,
-} from './baselineLogic';
+} from './downloadRecordLogic';
+import {
+  attemptOfFailure,
+  compareOnConnect,
+  ComparisonEnv,
+  ComparisonRequest,
+} from './onlineComparisonRun';
+import { Comparison, ComparisonModel } from './onlineComparisonLogic';
+import { compilerFlags } from './compilerSettingsLogic';
 import { BuildPhase } from './buildLogic';
 import { ControllerRun } from './controllerRunLogic';
 import { DevicePanelModel } from './devicePanelLogic';
@@ -68,8 +78,22 @@ export interface ConnectionFeature {
   readonly manager: ConnectionManager;
   /** The "IronPLC Connection" output channel. */
   readonly output: vscode.OutputChannel;
-  /** The current baseline check result; builds refuse while 'mismatch'. */
-  readonly baselineState: BaselineState;
+  /**
+   * The go-online comparison of the current connection, or of the last attempt
+   * that failed; undefined before any, after a disconnect, and when the
+   * compiler could not make it.
+   */
+  comparison(): Comparison | undefined;
+  /**
+   * Asks the controller for its identity again and compares it with the project,
+   * so the answer is the controller as it is now. Resolves the new comparison,
+   * or undefined when there is none.
+   */
+  refreshComparison(): Promise<Comparison | undefined>;
+  /** Fires when a comparison is to be shown to the person: a connection that is not up to date, or one that failed. */
+  readonly onDidAnnounceComparison: vscode.Event<{ model: ComparisonModel; comparison: Comparison }>;
+  /** Connects again as the last attempt did (the Retry action). */
+  retry(): Promise<void>;
   /** The full panel model for the current moment. */
   model(): DevicePanelModel;
   setBuildPhase(phase: BuildPhase | null): void;
@@ -82,13 +106,13 @@ export interface ConnectionFeature {
   updateRun(run: ControllerRun): void;
   /**
    * Handles a download the device acknowledged: records that the device
-   * received the container `container` (the file that was sent), then checks
-   * the device against the record again. The one place a build records an
+   * received the container `container` (the file that was sent), then compares
+   * the device with the project again. The one place a build records an
    * assemble acknowledgement. `keepContainer` also keeps a copy of the container
    * beside the record (a Download that replaced the application).
    */
   recordDownload(container: string, status: HotEditStatus, keepContainer: boolean): Promise<void>;
-  /** Resolves when the check of the device against its download record has finished. */
+  /** Resolves when the comparison of the device with the project has finished. */
   settled(): Promise<void>;
   readonly onDidChangeModel: vscode.Event<DevicePanelModel>;
   /**
@@ -113,7 +137,17 @@ export function registerConnectionSupport(
 
   const modelEmitter = new vscode.EventEmitter<DevicePanelModel>();
 
-  let baselineState: BaselineState = 'none';
+  let latestComparison: Comparison | undefined;
+  const announceEmitter = new vscode.EventEmitter<{ model: ComparisonModel; comparison: Comparison }>();
+  context.subscriptions.push(announceEmitter);
+  // The connection last opened, saved or not, and how: what Retry runs again and
+  // what the comparison of a failed attempt is made for. The manager forgets the
+  // profile when a connection ends, so it is kept here.
+  let lastOpen: { profile: ConnectionProfile; intended: string | undefined; protectedController: boolean } | undefined;
+  // True from the moment a connection is requested until its identity arrives:
+  // the comparison of that connection opens the dialog. A reconnect, a download
+  // and an identity asked for again renew the comparison and open nothing.
+  let announceNext = false;
   let pendingCheck: Promise<void> = Promise.resolve();
   let buildPhase: BuildPhase | null = null;
   let lastStatusOverride: HotEditStatus | null = null;
@@ -135,20 +169,31 @@ export function registerConnectionSupport(
           intendedDeviceId = undefined;
           notes = [];
           lastRunOverride = null;
+          latestComparison = undefined;
         }
         render();
       },
-      onIdentity: (identity: IdentityInfo) => {
+      onIdentity: (identity: IdentityInfo, cause) => {
         lastStatusOverride = null;
         lastRunOverride = null;
-        pendingCheck = Promise.all([reconcileBaseline(identity), noteIdentity(identity)]).then(render);
+        const announce = cause === 'connected' && announceNext;
+        if (cause === 'connected') {
+          announceNext = false;
+        }
+        pendingCheck = Promise.all([settleIdentity(identity, cause, announce), noteIdentity(identity)]).then(render);
         render();
       },
       onStatus: (status) => {
         lastStatusOverride = status;
         render();
       },
-      report: (code, detail) => reportProblem(code, detail),
+      report: (code, detail) => {
+        reportProblem(code, detail);
+        // A connection that was open and ended: the same view explains it.
+        if (code === ProblemCode.ConnectionLost) {
+          void explainFailure();
+        }
+      },
     },
     clock: {
       sleep: (ms: number) => new Promise(resolve => setTimeout(resolve, ms)),
@@ -163,9 +208,10 @@ export function registerConnectionSupport(
   const feature: ConnectionFeature = {
     manager,
     output: outputChannel,
-    get baselineState() {
-      return baselineState;
-    },
+    comparison: () => latestComparison,
+    refreshComparison,
+    onDidAnnounceComparison: announceEmitter.event,
+    retry,
     model,
     setBuildPhase(phase: BuildPhase | null): void {
       buildPhase = phase;
@@ -189,7 +235,9 @@ export function registerConnectionSupport(
           `IronPLC: the device received the application, but the download record could not be written: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
-      baselineState = await currentBaseline(status, connectedDeviceId());
+      // The controller holds another application now: ask it again, and compare.
+      await manager.refreshIdentity();
+      await pendingCheck;
       render();
     },
     settled: () => pendingCheck,
@@ -255,42 +303,6 @@ export function registerConnectionSupport(
     return true;
   }
 
-  /**
-   * Compares the device with its download record: the content hash the device
-   * reports against the record, so a reboot, which restarts the generation
-   * counters, keeps a match. A connection without an application container, a
-   * device that reports no id, or a record that cannot be looked up, is not
-   * checked (none); a lookup failure is in the connection channel.
-   */
-  async function currentBaseline(
-    application: HotEditStatus,
-    deviceId: string | undefined,
-  ): Promise<BaselineState> {
-    const profile = manager.currentProfile;
-    const run = runTool();
-    if (profile === undefined || run === undefined) {
-      return 'none';
-    }
-    const plan = planDownload({
-      profile,
-      folders: workspaceFolders(),
-      sourceExtensions,
-      deviceId,
-      status: application,
-      requireDeviceHash: false,
-    });
-    if ('reason' in plan) {
-      return 'none';
-    }
-    try {
-      return await readBaseline(run, readTextIfPresent, plan.download.anchor, plan.download.deviceId, application);
-    }
-    catch (err) {
-      outputChannel.appendLine(`The download record could not be checked, so the device is not compared with it: ${err instanceof Error ? err.message : String(err)}`);
-      return 'none';
-    }
-  }
-
   function model(): DevicePanelModel {
     const snapshot = manager.snapshot();
     return {
@@ -298,7 +310,7 @@ export function registerConnectionSupport(
       profileName: snapshot.profileName,
       identity: snapshot.identity,
       lastStatus: lastStatusOverride ?? snapshot.lastStatus,
-      baseline: baselineState,
+      comparison: latestComparison ?? null,
       buildPhase,
       run: lastRunOverride,
       notes,
@@ -364,11 +376,15 @@ export function registerConnectionSupport(
     }
   }
 
-  async function reconcileBaseline(identity: IdentityInfo): Promise<void> {
-    // A session started with a container is a download: record it, when the
-    // device shows that it runs that container, before the check below.
+  /**
+   * After an identity arrives. A session started with a container is a download:
+   * it is recorded, when the device shows that it runs that container, before the
+   * comparison reads the records. Then the controller is compared with the
+   * project (`ironplcc online-compare`), and the dialog opens when `announce`.
+   */
+  async function settleIdentity(identity: IdentityInfo, cause: IdentityCause, announce: boolean): Promise<void> {
     const started = manager.currentProfile;
-    if (started !== undefined && connectionMethod(started).recordsSessionStart) {
+    if (cause === 'connected' && started !== undefined && connectionMethod(started).recordsSessionStart) {
       try {
         await recordDownloadOf(undefined, identity.application, true, identity.device.deviceId);
       }
@@ -376,15 +392,63 @@ export function registerConnectionSupport(
         outputChannel.appendLine(`The session start was not recorded: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
-    const next = await currentBaseline(identity.application, identity.device.deviceId);
-    const becameStale = next === 'mismatch' && baselineState !== 'mismatch';
-    baselineState = next;
-    if (becameStale) {
-      reportProblem(
-        ProblemCode.StaleBaseline,
-        'The application on the device is not the one this project last downloaded to it. Re-sync the project from the device, rebuild, then connect again.',
-      );
+    const profile = started ?? lastOpen?.profile;
+    if (profile === undefined) {
+      return;
     }
+    latestComparison = await compareOnConnect(comparisonEnv(), { profile, attempt: 'ok', identity }, comparisonUi, announce);
+    render();
+  }
+
+  /** The comparison of an attempt that did not reach the controller, shown with its dialog. */
+  async function explainFailure(): Promise<void> {
+    // A connection the person ended (no failure was recorded) is not explained.
+    if (lastOpen === undefined || manager.lastFailure === undefined) {
+      return;
+    }
+    const attempt = attemptOfFailure(manager.lastFailure, lastOpen.protectedController);
+    const request: ComparisonRequest = { profile: lastOpen.profile, attempt };
+    latestComparison = await compareOnConnect(comparisonEnv(), request, comparisonUi, true);
+    render();
+  }
+
+  /** The controller's identity again, and the comparison made from it. */
+  async function refreshComparison(): Promise<Comparison | undefined> {
+    if (await manager.refreshIdentity() === undefined) {
+      return undefined;
+    }
+    await pendingCheck;
+    return latestComparison;
+  }
+
+  /** Connects again as the last attempt did. */
+  async function retry(): Promise<void> {
+    if (lastOpen === undefined) {
+      await connect();
+      return;
+    }
+    await openProfile(lastOpen.profile, lastOpen.intended, lastOpen.protectedController);
+  }
+
+  const comparisonUi = {
+    current: (comparison: Comparison) => {
+      latestComparison = comparison;
+      render();
+    },
+    dialog: (model: ComparisonModel, comparison: Comparison) => announceEmitter.fire({ model, comparison }),
+  };
+
+  /** What the comparison needs of the editor now: the compiler, the folders, the settings. */
+  function comparisonEnv(): ComparisonEnv {
+    const compiler = compilerPath;
+    return {
+      run: compiler === undefined ? undefined : (args, input) => runCompiler(compiler, args, () => {}, undefined, input),
+      folders: workspaceFolders(),
+      sourceExtensions,
+      options: () => compilerFlags(currentCompilerSettings()),
+      storageDir: context.globalStorageUri.fsPath,
+      say: line => outputChannel.appendLine(line),
+    };
   }
 
   async function connect(): Promise<void> {
@@ -427,6 +491,7 @@ export function registerConnectionSupport(
   async function openProfile(
     profile: ConnectionProfile,
     intended: string | undefined,
+    protectedController = false,
   ): Promise<'connected' | 'failed' | 'already-connected'> {
     if (connectionMethod(profile).needsLocalTools && !ensureLocalTools(profile)) {
       return 'failed';
@@ -438,12 +503,19 @@ export function registerConnectionSupport(
     // A connection that is open stays as it is, with the controller it was meant for.
     if (manager.currentState === 'disconnected') {
       intendedDeviceId = intended;
+      lastOpen = { profile, intended, protectedController };
+      announceNext = true;
     }
     const result = await manager.connect(profile);
     if (result === 'already-connected') {
       void vscode.window.showInformationMessage(
         `IronPLC is already connected${profileSuffix()}. Run "IronPLC: Disconnect from Device" first.`,
       );
+    }
+    else if (result === 'failed') {
+      // The same view explains a connection that did not open.
+      announceNext = false;
+      await explainFailure();
     }
     return result;
   }
@@ -471,7 +543,7 @@ export function registerConnectionSupport(
       return;
     }
     outputChannel.appendLine(connectingText(profiles[0], source));
-    await openProfile(profiles[0], controller.deviceId);
+    await openProfile(profiles[0], controller.deviceId, api?.lastBrowse()?.devices.find(device => device.deviceId === controller.deviceId)?.protected === true);
   }
 
   async function connectController(argument: unknown): Promise<void> {

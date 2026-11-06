@@ -19,14 +19,14 @@
  * - Next case (a USB method): one module in `connectionMethods/` and one line
  *   here, plus its value in the `package.json` enum, which the check above
  *   fails the build without. Profile validation, the connect command, the
- *   QuickPick, the reconnect policy and the baseline code are not edited.
+ *   QuickPick, the reconnect policy and the download record code are not edited.
  *
  * The module is vscode-free on purpose, like the logic modules that use it:
  * a member that needs the editor (the output channel, the settings) receives
  * it in the {@link OpenContext}.
  */
 
-import type { Anchor, FolderRef } from './baselineLogic';
+import type { Anchor, FolderRef } from './downloadRecordLogic';
 import type { CompilerSettings } from './compilerSettingsLogic';
 import type { ConnectionProfileFields } from './connectionProfiles';
 import type { OpenedConnection } from './connectionState';

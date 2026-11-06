@@ -39,7 +39,7 @@ export interface OnlineEditIo {
   /**
    * Stages the container of the build in the change mode. True when it is
    * staged; false when the step stopped before anything was sent and has told
-   * the person why (a stale baseline, a refused decision). A refusal of the
+   * the person why (the go-online comparison does not allow an online change, a refused decision). A refusal of the
    * device is thrown as the coded error.
    */
   accept(): Promise<boolean>;

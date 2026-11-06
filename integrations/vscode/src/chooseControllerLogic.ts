@@ -16,7 +16,7 @@
  * editor.
  */
 
-import { Anchor, connectionAnchor, FolderRef, RunCompiler } from './baselineLogic';
+import { Anchor, connectionAnchor, FolderRef, RunCompiler } from './downloadRecordLogic';
 import {
   BrowseSnapshot,
   ControllerArgument,

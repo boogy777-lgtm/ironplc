@@ -2,6 +2,7 @@ import * as assert from 'assert';
 
 import { DevicePanelModel } from '../../devicePanelLogic';
 import { HotEditStatus, IdentityInfo } from '../../hotEditSession';
+import { Comparison } from '../../onlineComparisonLogic';
 import { SUPPORTED_SESSION_PROTOCOL } from '../../sessionConstants';
 import { statusCommand, statusText, statusTooltip } from '../../statusBarLogic';
 
@@ -23,13 +24,26 @@ const IDENTITY: IdentityInfo = {
   application: STATUS,
 };
 
+const COMPARISON: Comparison = {
+  row: 'otherApplication',
+  rowNumber: 9,
+  summary: 'The controller holds an application that this workstation did not send.',
+  connected: true,
+  atOnce: false,
+  controller: null,
+  project: { status: 'upToDate', application: null, contentHash: null, layoutHash: null },
+  lastDownload: null,
+  information: [],
+  actions: [],
+  hotEdit: { allowed: false, reason: null },
+};
+
 function model(overrides?: Partial<DevicePanelModel>): DevicePanelModel {
   return {
     state: 'disconnected',
     profileName: null,
     identity: null,
     lastStatus: null,
-    baseline: 'none',
     buildPhase: null,
     ...overrides,
   };
@@ -54,6 +68,18 @@ suite('statusText', () => {
     const connected = model({ state: 'connected', profileName: 'Press', identity: IDENTITY });
     assert.strictEqual(statusText(connected, undefined), '$(plug) IronPLC: Press line 3 (running)');
     assert.strictEqual(statusText(connected, '00ffeedd'), '$(plug) IronPLC: Press line 3 (running)');
+  });
+
+  test('statusText_when_connected_with_a_comparison_then_the_summary_of_its_row_follows_the_name', () => {
+    const connected = model({ state: 'connected', identity: IDENTITY, comparison: COMPARISON });
+    assert.strictEqual(
+      statusText(connected, undefined),
+      `$(plug) IronPLC: Press line 3 (running) — ${COMPARISON.summary}`,
+    );
+  });
+
+  test('statusText_when_connected_without_a_comparison_then_no_summary', () => {
+    assert.strictEqual(statusText(model({ state: 'connected', identity: IDENTITY, comparison: null }), undefined), '$(plug) IronPLC: Press line 3 (running)');
   });
 
   test('statusText_when_connected_then_the_run_state_the_device_reports', () => {
@@ -94,10 +120,21 @@ suite('statusTooltip', () => {
     assert.ok(tooltip.includes('Connect to Chosen Controller'));
   });
 
-  test('statusTooltip_when_connected_then_profile_status_and_the_panel_hint', () => {
+  test('statusTooltip_when_connected_then_profile_status_and_the_comparison_hint', () => {
     const tooltip = statusTooltip(model({ state: 'connected', profileName: 'Press', lastStatus: STATUS }), undefined);
     assert.ok(tooltip.startsWith('Profile: Press'));
-    assert.ok(tooltip.endsWith('Click for the IronPLC Device panel.'));
+    assert.ok(tooltip.endsWith('Click for the go-online comparison (Show Online Comparison).'));
+  });
+
+  test('statusTooltip_when_connected_with_a_comparison_then_its_summary_follows_the_profile', () => {
+    const tooltip = statusTooltip(model({ state: 'connected', profileName: 'Press', comparison: COMPARISON }), undefined);
+    assert.strictEqual(tooltip.split('\n')[1], COMPARISON.summary);
+  });
+
+  test('statusTooltip_when_disconnected_after_a_failed_attempt_then_the_summary_of_the_attempt_comes_first', () => {
+    const failed = { ...COMPARISON, row: 'unreachable', summary: 'The controller cannot be reached.', connected: false };
+    const tooltip = statusTooltip(model({ comparison: failed }), undefined);
+    assert.strictEqual(tooltip, 'The controller cannot be reached.\nConnect to a device (IronPLC: Connect to Device)');
   });
 
   test('statusTooltip_when_connected_then_the_run_state_and_the_fault_in_full', () => {
@@ -132,8 +169,12 @@ suite('statusCommand', () => {
     assert.strictEqual(statusCommand('disconnected', undefined), 'ironplc.connect');
   });
 
-  test('statusCommand_when_not_disconnected_then_the_device_panel_whatever_is_chosen', () => {
-    for (const state of ['connecting', 'connected', 'reconnecting'] as const) {
+  test('statusCommand_when_connected_then_the_comparison_is_shown_again_whatever_is_chosen', () => {
+    assert.strictEqual(statusCommand('connected', 'Press line 3'), 'ironplc.showOnlineComparison');
+  });
+
+  test('statusCommand_when_connecting_or_reconnecting_then_the_device_panel', () => {
+    for (const state of ['connecting', 'reconnecting'] as const) {
       assert.strictEqual(statusCommand(state, 'Press line 3'), 'ironplc.devicePanel.focus', state);
     }
   });

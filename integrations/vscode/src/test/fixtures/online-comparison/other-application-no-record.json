@@ -1,0 +1,103 @@
+{
+  "row": "otherApplication",
+  "rowNumber": 9,
+  "summary": "The controller holds an application that this workstation did not send.",
+  "connected": true,
+  "atOnce": false,
+  "controller": {
+    "deviceId": "0123456789abcdef0123456789abcdef",
+    "runtimeVersion": "0.247.0",
+    "runState": "running",
+    "holds": {
+      "kind": "application",
+      "contentHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "layoutHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    },
+    "editStage": null
+  },
+  "project": {
+    "status": "upToDate",
+    "application": "main",
+    "contentHash": "b829ac1bbd136e2f74b28bda8058469f530387255cfc924e9c417b45a132fd30",
+    "layoutHash": "5148cb7a5c02f8a9d5d8b625bbc9110e23b353e8efc3e5c50db30bfc62444ee6"
+  },
+  "lastDownload": null,
+  "information": [],
+  "actions": [
+    {
+      "action": "monitor",
+      "label": "Monitor",
+      "enabled": true,
+      "reason": null,
+      "detail": "Device level only: this workstation has no debug information for what the controller holds."
+    },
+    {
+      "action": "onlineChange",
+      "label": "Online change",
+      "enabled": false,
+      "reason": {
+        "code": "otherApplication",
+        "text": "The controller holds an application that this workstation did not send, so an online change cannot be based on it; Download replaces it."
+      },
+      "detail": null
+    },
+    {
+      "action": "download",
+      "label": "Download",
+      "enabled": true,
+      "reason": null,
+      "detail": "Download replaces the application and starts it from its initial values; only PERSISTENT variables with an equal declaration keep their value."
+    },
+    {
+      "action": "upload",
+      "label": "Upload",
+      "enabled": false,
+      "reason": {
+        "code": "notAvailable",
+        "text": "Upload into a new project is not available yet."
+      },
+      "detail": null
+    },
+    {
+      "action": "search",
+      "label": "Search the network",
+      "enabled": true,
+      "reason": null,
+      "detail": null
+    },
+    {
+      "action": "chooseAnother",
+      "label": "Choose another controller",
+      "enabled": true,
+      "reason": null,
+      "detail": null
+    },
+    {
+      "action": "retry",
+      "label": "Retry",
+      "enabled": false,
+      "reason": {
+        "code": "alreadyConnected",
+        "text": "A session is open."
+      },
+      "detail": null
+    },
+    {
+      "action": "resolve",
+      "label": "Resolve the unfinished edit",
+      "enabled": false,
+      "reason": {
+        "code": "noPendingEdit",
+        "text": "The controller has no unfinished edit."
+      },
+      "detail": null
+    }
+  ],
+  "hotEdit": {
+    "allowed": false,
+    "reason": {
+      "code": "otherApplication",
+      "text": "The controller holds an application that this workstation did not send, so an online change cannot be based on it; Download replaces it."
+    }
+  }
+}

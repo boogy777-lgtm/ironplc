@@ -686,6 +686,28 @@ JSON it prints; the MCP tool `online_compare` returns the same object.
    `testEdits` (mandatory per ADR-0064), observe, `assembleEdits`. A full
    initial deploy onto an empty device is a Download, the `replace` mode of the
    same sequence ([ADR-0088](../adrs/0088-download-is-the-replace-mode.md)).
+8. **The extension side** is a renderer. `onlineComparisonRun.ts` builds the one
+   command line (`online-compare`, the identity on standard input with
+   `--attempt ok`; a connection that failed passes `unreachable`, `busy` for
+   V6014, `protected` or `connection-lost`, so the same view explains it);
+   `onlineComparisonLogic.ts` mirrors the JSON (tolerant of rows, notes and
+   actions it does not know) and builds the Quick Pick model: the headline as the
+   title, the lines for the controller, the project, the last download and the
+   information rows, and one item for each action, enabled or not, with the
+   comparison's reason. `ACTION_HANDLERS` is the one table from an action to what
+   the editor does (a command, the network search, a reconnect, nothing); a guard
+   test fails when an action of the mirror has no entry, and Upload is one entry
+   the day the compiler enables it. Only `atOnce` (the `upToDate` row) goes online
+   with no dialog; the status item shows the summary of the row at all times. The
+   comparison is made again after a download or an assemble, after a reconnect,
+   and before the Accept stage of the online edit dialog, which begins only when
+   `hotEdit.allowed` is true and otherwise shows the comparison's reason and offers
+   Download when that action is enabled. A stdio connection to a source program has
+   no application container to name records after, so it is compared against a
+   container in the storage directory of the extension that has no records beside
+   it. The extension compares no hash and reads no record for the comparison; the
+   TypeScript check of the download record and the problem code E0015 it raised
+   no longer exist.
 
 ### The path record (the controller last chosen)
 

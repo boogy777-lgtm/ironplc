@@ -4,47 +4,40 @@ E0015
 
 .. problem-summary:: E0015
 
-The application on the device is not the one this project last downloaded to
-it: another engineer edited the device, or the device runs something else than
-it did. Deploying local edits over unknown device state is refused
-(fail-closed).
+.. note::
+
+   **Deprecated.** The editor no longer reports E0015. The code stays reserved
+   so that links to this page keep working, and it is never given another
+   meaning.
+
+E0015 was the refusal of the Accept stage of an online edit when the
+application on the device was not the one this project last downloaded to it:
+another engineer had edited the device, or the device ran something else than
+it did before. The editor compared the content hash the device reported with
+the download record of the project and refused the edit on a mismatch.
+
+The go-online comparison replaces that check. When the editor connects to a
+controller, it asks the compiler to compare what the controller holds with what
+the project has and with what this workstation last downloaded (see
+:doc:`/reference/editor/overview` and the ``online-compare`` command of
+:doc:`/reference/compiler/ironplcc`). The comparison never refuses the
+connection. It names the state of the controller and the actions that follow
+from it, each with the reason when it is not available.
+
+What used to be E0015 now appears as follows:
+
+- **The controller holds an application that this workstation did not send.**
+  The comparison shows the row *otherApplication*. An online change is not
+  available, with the reason that it cannot be based on an application this
+  workstation does not know, and **Download** is offered to replace it.
+- **The device does not report the content hash of its application.** The
+  comparison adds the information row *contentNotReported*, and an online
+  change is not available.
 
 **Solutions**:
 
-1. **Re-sync the project from the device**, rebuild, and connect again —
-   the record of what the device received is refreshed the moment the device
-   acknowledges your build.
-
-2. **Review before building**: while the application on the device is not the
-   one that was recorded, the connection stays up for monitoring, but the Accept
-   stage of the online edit dialog is refused until the project matches the device
-   again.
-
-When the device acknowledges a build from this workspace, and when a session
-starts with a container, the extension records what the device received in the
-*download record* (:doc:`/reference/compiler/ironplcc`, ``record-download``), a
-file beside the application container, one for each device, named by the
-device id that the device reports. The record holds the hashes of the
-container. When the extension connects, it compares the
-content hash that the device reports with the record, before it sends anything.
-The comparison is by content, so a device that restarted still matches,
-although it starts its generation counters again. A device that has no
-record yet (the first deploy to it) is not checked. Records that earlier versions
-of the extension wrote under the name of a connection are not read, so such a
-device is not checked until the next download to it. A device that does not
-report a device id has no record: the extension does not write one, and says why
-in the *IronPLC Connection* output channel.
-
-A device that does not report the content hash of its application cannot be
-compared. When a record exists for it, the extension reports this problem;
-update the device to the version of the extension, or remove the record.
-
-The extension keeps no record for a stdio connection whose program is a source
-file, because the session compiles it into a container that is not a file in
-your project. It does not check that connection.
-
-See Also
---------
-
-- :doc:`/reference/editor/problems/E0013` --- the connection could not be opened
-- :doc:`/reference/editor/problems/E0014` --- the connection was lost
+1. Connect again and read the comparison: it says what the controller holds and
+   which actions are available.
+2. To deploy over an application this workstation did not send, use
+   **IronPLC: Download to Controller**, which replaces the application and keeps
+   only the PERSISTENT variables whose declaration did not change.

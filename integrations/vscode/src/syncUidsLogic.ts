@@ -76,7 +76,7 @@ export class MapUidError extends Error {
  * no real child process is needed to exercise the flow.
  */
 export type ExecFileFn
-  = (file: string, args: string[]) => Promise<{ stdout: string; stderr: string }>;
+  = (file: string, args: string[], input?: string) => Promise<{ stdout: string; stderr: string }>;
 
 /** UI decisions the resolution flow needs, injected so the flow is unit-testable. */
 export interface SyncResolutionUi {

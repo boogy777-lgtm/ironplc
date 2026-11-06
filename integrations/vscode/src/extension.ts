@@ -27,6 +27,7 @@ import { registerDevicePanel } from './devicePanel';
 import { registerHaPanel } from './haPanel';
 import { registerBuildCommands } from './buildCommands';
 import { registerOnlineEditCommands } from './onlineEditCommands';
+import { registerOnlineComparisonCommands } from './onlineComparisonCommands';
 import { registerBuildApplication } from './buildApplication';
 import { registerControllerRunCommands } from './controllerRunCommands';
 import { BUILD_AREA_NAME } from './buildAreaLogic';
@@ -174,6 +175,7 @@ export function activate(context: vscode.ExtensionContext) {
   // report coded problems (or refuse) when a profile or tool is missing.
   const connection = registerConnectionSupport(context, result?.path, sourceExtensions, showProblem);
   registerDevicePanel(context, connection);
+  registerOnlineComparisonCommands(context, connection);
   // The commands that another extension (IronLink) hands a controller to.
   registerHandoffCommands(context, {
     choose: chooseController({
@@ -194,7 +196,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(buildArea);
   registerBuildApplication(context, result?.path, buildArea, showProblem);
   const buildSupport = registerBuildCommands(context, result?.path, sourceExtensions, connection, showProblem, buildArea, showCodedText);
-  registerOnlineEditCommands(context, buildSupport, connection, sourceExtensions, showProblem, showCodedText);
+  registerOnlineEditCommands(context, buildSupport, connection, sourceExtensions, showCodedText);
   registerControllerRunCommands(context, connection, showCodedText);
 
   if (!result) {

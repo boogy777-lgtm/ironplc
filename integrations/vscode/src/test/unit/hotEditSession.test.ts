@@ -524,8 +524,22 @@ suite('parseResponseLine identity', () => {
         },
         application: createStatus(),
         redundancy: undefined,
+        wire: JSON.parse(IDENTITY_LINE),
       },
     });
+  });
+
+  test('parseResponseLine_when_identity_has_fields_the_client_does_not_model_then_the_wire_keeps_them', () => {
+    // The go-online comparison reads these from the answer as the device sent it.
+    const line = IDENTITY_LINE.slice(0, -1) + ',"persistedContentHash":"' + 'ab'.repeat(32) + '","containerFormat":9}';
+
+    const response = parseResponseLine(line);
+
+    assert.strictEqual(response.kind, 'identity');
+    if (response.kind === 'identity') {
+      assert.strictEqual(response.identity.wire?.persistedContentHash, 'ab'.repeat(32));
+      assert.strictEqual(response.identity.wire?.containerFormat, 9);
+    }
   });
 
   test('parseResponseLine_when_identity_has_a_device_id_then_it_is_read', () => {

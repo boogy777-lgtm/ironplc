@@ -188,7 +188,7 @@ the registry formalizes them; it creates no runtime manager (task §4.16).
 | Execution binding / mode | Runtime — single owner (`host.rs:150-167`) | `HostMode` + one pending swap (`host.rs:51-66`) | Survives reboot as the committed generation (boot adoption, ADR-0064 amendment) | `HostStatus` projection (`host.rs:390-409`) |
 | Output authority | HA supervisor — pair-wide epoch (`epoch.rs:19-25`), `OwnerLease` (`lease.rs:36-69`), fencing `ModuleState` (`fencing.rs:92-111`) | Newtype counter + expiry + per-module ownership truth | New right only through fencing; a restored role enum grants nothing (task §4.14) | Anti-stale adoption (`epoch.rs:55-64`); barrier verification (`fencing.rs:286-296`) |
 | Transactions (hot edit, deployment) | Runtime — candidate lifecycle FSM (`host.rs:9-15`); a justified EFSM per S03 | `PendingEditRecord` (RAM-only, `host.rs:93-109`) + committed-wire latch | Candidate dies on reboot; canonical bytes persist via A/B slots (`slot_store.rs:1-33`) | Coded refusals (V-codes) |
-| Derived status / caches | Nobody — projections only | `HostStatus`, HA views (`views.rs`) | Re-derived from facts after any restart/failover; a cache never extends authority: the boundary re-checks the permit (`host.rs:701-707`) — INV15/S06 | Stale-baseline refusal on the client (E0015) |
+| Derived status / caches | Nobody — projections only | `HostStatus`, HA views (`views.rs`) | Re-derived from facts after any restart/failover; a cache never extends authority: the boundary re-checks the permit (`host.rs:701-707`) — INV15/S06 | The go-online comparison on the client (ADR-0089) |
 
 ### 4.3 Enforcement Boundary Design for Linux
 

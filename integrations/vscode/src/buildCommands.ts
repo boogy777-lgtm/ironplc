@@ -6,8 +6,9 @@
  * each exists once. The Download reuses the connected `HotEditSession` and the
  * vscode-free sequencing in `downloadLogic`; this module is glue: it resolves
  * the program, compiles it with the shared compile path, and renders phases and
- * errors. Download does not refuse a stale baseline, because it replaces the
- * application and says so in its confirmation. The device's acknowledgement of
+ * errors. Download does not refuse because the controller holds another
+ * application, because it replaces the application and says so in its
+ * confirmation. The device's acknowledgement of
  * an assemble (the dialog's Assemble, the Download) is handled in one function,
  * `acknowledgeAssemble`, which records the download. A build writes the shared
  * Build area (`buildAreaLogic`), which it receives from the caller and clears
@@ -42,6 +43,7 @@ import {
   syncIdsStep,
 } from './downloadLogic';
 import { ConnectionFeature } from './connection';
+import { replacesOtherApplication } from './onlineComparisonLogic';
 import { createSyncResolutionUi, resolvePathInteractive } from './hotEdit';
 
 /** The container a build sends: the file it is read from, and its bytes. */
@@ -161,7 +163,7 @@ export function registerBuildCommands(
         session,
         io,
         { name: path.basename(program), origin: BUILD_ORIGIN },
-        connection.baselineState === 'mismatch',
+        replacesOtherApplication(connection.comparison()),
       );
       showDownloadOutcome(outcome, title);
     }

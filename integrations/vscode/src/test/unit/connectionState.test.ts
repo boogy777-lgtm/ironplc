@@ -78,6 +78,7 @@ interface Setup {
   states: ConnectionState[];
   errors: RecordedError[];
   identities: IdentityInfo[];
+  causes: string[];
   statuses: HotEditStatus[];
   sleeps: number[];
   heartbeat: { tick: () => void; starts: number };
@@ -102,6 +103,7 @@ function setup(options?: SetupOptions): Setup {
   const states: ConnectionState[] = [];
   const errors: RecordedError[] = [];
   const identities: IdentityInfo[] = [];
+  const causes: string[] = [];
   const statuses: HotEditStatus[] = [];
   const sleeps: number[] = [];
   const heartbeat = { tick: () => {}, starts: 0 };
@@ -129,8 +131,9 @@ function setup(options?: SetupOptions): Setup {
       onState: (state) => {
         states.push(state);
       },
-      onIdentity: (identity) => {
+      onIdentity: (identity, cause) => {
         identities.push(identity);
+        causes.push(cause);
       },
       onStatus: (status) => {
         statuses.push(status);
@@ -154,7 +157,7 @@ function setup(options?: SetupOptions): Setup {
     policy: options?.policy,
   });
 
-  return { manager, opened, states, errors, identities, statuses, sleeps, heartbeat };
+  return { manager, opened, states, errors, identities, causes, statuses, sleeps, heartbeat };
 }
 
 /** Lets the manager's promise chains settle: each turn is one macrotask. */
@@ -481,5 +484,126 @@ suite('ConnectionManager', () => {
 
     assert.strictEqual(manager.currentState, 'connected');
     assert.deepStrictEqual(errors, [], 'a coded refusal is a protocol answer, never a reconnect trigger');
+  });
+
+  test('connect_when_identity_refused_with_busy_vcode_then_the_failure_names_the_vcode', async () => {
+    const { manager } = setup({
+      policy: TEST_POLICY,
+      open: (profile, openedList) => {
+        const target = new MockOpened();
+        target.transport.handler = () => {
+          target.transport.emitLine(JSON.stringify({ response: 'error', vCode: 'V6014', message: 'one engineering session' }));
+        };
+        openedList.push(target);
+        return Promise.resolve(target);
+      },
+    });
+
+    await manager.connect(tcpProfile());
+
+    assert.strictEqual(manager.lastFailure?.code, ProblemCode.ConnectFailed);
+    assert.strictEqual(manager.lastFailure?.vCode, 'V6014');
+  });
+
+  test('connect_when_transport_open_fails_then_the_failure_has_no_vcode', async () => {
+    const { manager } = setup({ policy: TEST_POLICY, open: () => Promise.reject(new Error('connection refused')) });
+
+    await manager.connect(tcpProfile());
+
+    assert.strictEqual(manager.lastFailure?.vCode, null);
+    assert.ok(manager.lastFailure?.message.includes('connection refused'));
+  });
+
+  test('connect_when_a_new_attempt_starts_then_the_earlier_failure_is_forgotten', async () => {
+    let fail = true;
+    const { manager } = setup({
+      policy: TEST_POLICY,
+      open: (profile, openedList) => {
+        if (fail) {
+          return Promise.reject(new Error('connection refused'));
+        }
+        const target = new MockOpened();
+        target.transport.handler = () => target.transport.emitLine(identityLine());
+        openedList.push(target);
+        return Promise.resolve(target);
+      },
+    });
+    await manager.connect(tcpProfile());
+    fail = false;
+
+    await manager.connect(tcpProfile());
+
+    assert.strictEqual(manager.lastFailure, undefined);
+  });
+
+  test('disconnect_when_the_person_ends_the_connection_then_no_failure_is_recorded', async () => {
+    const { manager } = setup({ policy: TEST_POLICY, open: () => Promise.reject(new Error('connection refused')) });
+    await manager.connect(tcpProfile());
+
+    manager.disconnect();
+
+    assert.strictEqual(manager.lastFailure, undefined);
+  });
+
+  test('transportFault_when_reconnects_are_exhausted_then_the_failure_is_a_lost_connection', async () => {
+    let opens = 0;
+    const { manager, opened } = setup({
+      policy: TEST_POLICY,
+      open: (profile, openedList) => {
+        opens++;
+        if (opens > 1) {
+          return Promise.reject(new Error('connection refused'));
+        }
+        const target = new MockOpened();
+        target.transport.handler = () => target.transport.emitLine(identityLine());
+        openedList.push(target);
+        return Promise.resolve(target);
+      },
+    });
+    await manager.connect(tcpProfile());
+
+    opened[0].transport.emitExit();
+    await flush(200);
+
+    assert.strictEqual(manager.currentState, 'disconnected');
+    assert.strictEqual(manager.lastFailure?.code, ProblemCode.ConnectionLost);
+  });
+
+  test('connect_when_session_opens_then_the_identity_arrives_with_the_cause_connected', async () => {
+    const { manager, causes } = setup({ policy: TEST_POLICY });
+
+    await manager.connect(tcpProfile());
+
+    assert.deepStrictEqual(causes, ['connected']);
+  });
+
+  test('refreshIdentity_when_connected_then_the_identity_is_published_with_the_cause_refreshed', async () => {
+    const { manager, identities, causes } = setup({ policy: TEST_POLICY });
+    await manager.connect(tcpProfile());
+
+    const identity = await manager.refreshIdentity();
+
+    assert.strictEqual(identity?.device.name, 'ironplcvm');
+    assert.deepStrictEqual(causes, ['connected', 'refreshed']);
+    assert.strictEqual(identities.length, 2);
+    assert.strictEqual(manager.snapshot().identity, identity);
+  });
+
+  test('refreshIdentity_when_not_connected_then_nothing_is_asked', async () => {
+    const { manager, causes } = setup({ policy: TEST_POLICY });
+
+    assert.strictEqual(await manager.refreshIdentity(), undefined);
+    assert.deepStrictEqual(causes, []);
+  });
+
+  test('refreshIdentity_when_the_device_does_not_answer_then_undefined_and_nothing_published', async () => {
+    const { manager, opened, causes } = setup({ policy: TEST_POLICY });
+    await manager.connect(tcpProfile());
+    opened[0].transport.handler = undefined;
+
+    const identity = await manager.refreshIdentity();
+
+    assert.strictEqual(identity, undefined);
+    assert.deepStrictEqual(causes, ['connected']);
   });
 });

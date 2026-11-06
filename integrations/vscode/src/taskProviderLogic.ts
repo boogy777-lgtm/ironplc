@@ -52,9 +52,12 @@ export function runCompiler(
   args: string[],
   log: (text: string) => void,
   exec: ExecFileFn = defaultExecFile,
+  input?: string,
 ): Promise<{ stdout: string; stderr: string }> {
   log(`$ ${compiler} ${args.join(' ')}\n`);
-  return exec(compiler, args).then(
+  // `input` is written to the standard input of the compiler, for a command that
+  // reads it (`online-compare --identity -`); without it, the call is as it was.
+  return (input === undefined ? exec(compiler, args) : exec(compiler, args, input)).then(
     (result) => {
       if (result.stdout) {
         log(result.stdout);
@@ -73,9 +76,9 @@ export function runCompiler(
 }
 
 /** The glue-side `ExecFileFn` on `child_process.execFile`. */
-function defaultExecFile(file: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
+function defaultExecFile(file: string, args: string[], input?: string): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    execFile(file, args, (error, stdout, stderr) => {
+    const child = execFile(file, args, (error, stdout, stderr) => {
       if (error) {
         const detail = firstLine(stderr) || firstLine(stdout) || String(error);
         reject(new Error(detail));
@@ -83,6 +86,11 @@ function defaultExecFile(file: string, args: string[]): Promise<{ stdout: string
       }
       resolve({ stdout, stderr });
     });
+    if (input !== undefined) {
+      // A program that exits before it reads its input closes the pipe: its exit status says what went wrong.
+      child.stdin?.on('error', () => undefined);
+      child.stdin?.end(input);
+    }
   });
 }
 

@@ -154,7 +154,9 @@ content comparison with one place to find, read and version every record.
   a match, and a reboot keeps it. A record and another hash, or a device that
   reports none (it predates the field), is a mismatch, which is the refusal
   E0015 as before: what a device that cannot say what it runs holds is unknown,
-  and the editor does not build over it. No record is no check.
+  and the editor does not build over it. No record is no check. (The go-online
+  comparison of [ADR-0089](0089-go-online-comparison.md) replaced this check: the
+  compiler makes the comparison and E0015 is removed.)
 - **The download paths.** Every path that puts a container on a device records the
   download through the one writer, with the application container as the anchor of
   the record (a stdio connection whose program is a container: that container; any
@@ -231,11 +233,9 @@ content comparison with one place to find, read and version every record.
 - `compiler/ironplc-cli/tests/cli_record_download.rs`: `record-download` and
   `record-download-path` as the editor runs them, the missing file, the file that
   is not a container, a device id that is not 32 lowercase hexadecimal digits and the hash that is not the container's.
-- `integrations/vscode/src/test/unit/baselineLogic.test.ts`: a reboot keeps a
-  match, another container is a mismatch, no record is none, a device that reports
-  no hash is a mismatch, the plan of each download path, a device that reports no
-  id (nothing recorded, with the reason), a renamed profile (the same plan), and
-  the guards above.
+- `integrations/vscode/src/test/unit/downloadRecordLogic.test.ts`: the plan of each
+  download path, a device that reports no id (nothing recorded, with the reason),
+  a renamed profile (the same plan), and the guards above.
 - `compiler/ironplc-cli/src/cli/up_to_date_tests.rs`: the second build is up to
   date and leaves the container untouched, `--force`, a changed source, a changed
   option, a deleted or altered container, and a missing, damaged and

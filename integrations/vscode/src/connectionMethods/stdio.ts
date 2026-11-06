@@ -7,7 +7,7 @@
 import { spawn } from 'child_process';
 import * as path from 'path';
 
-import type { Anchor } from '../baselineLogic';
+import type { Anchor } from '../downloadRecordLogic';
 import { programKind } from '../debugAdapterLogic';
 import { ProblemCode, StdioLineTransport } from '../vscodeCommon';
 import { vmPathBeside } from '../stdioTransport';

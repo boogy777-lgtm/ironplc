@@ -8,9 +8,9 @@
 
 import { ConnectionState } from './connectionState';
 import { formatStatusText, HotEditStatus, IdentityInfo } from './hotEditSession';
-import { BaselineState } from './baselineLogic';
 import { BuildPhase } from './buildLogic';
 import { ControllerRun } from './controllerRunLogic';
+import { Comparison } from './onlineComparisonLogic';
 
 /** One row of the device panel. */
 export interface PanelRow {
@@ -28,7 +28,12 @@ export interface DevicePanelModel {
   profileName: string | null;
   identity: IdentityInfo | null;
   lastStatus: HotEditStatus | null;
-  baseline: BaselineState;
+  /**
+   * The go-online comparison of the connection (ADR-0089), or of the attempt
+   * that failed: the status line shows its summary. Absent or null when there
+   * is none.
+   */
+  comparison?: Comparison | null;
   buildPhase: BuildPhase | null;
   /**
    * What the device last said about scanning in answer to Run or Stop; absent
@@ -117,14 +122,6 @@ export function devicePanelRows(model: DevicePanelModel): PanelRow[] {
 
   if (model.state === 'reconnecting') {
     rows.push({ id: 'stale', label: 'Last device data', description: 'stale — reconnecting' });
-  }
-
-  if (model.baseline === 'mismatch') {
-    rows.push({
-      id: 'baseline',
-      label: 'Baseline',
-      description: 'stale (E0015) — re-sync from the device, rebuild, then connect',
-    });
   }
 
   (model.notes ?? []).forEach((note, index) => {
