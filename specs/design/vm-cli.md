@@ -116,6 +116,8 @@ ironplcvm serve <FILE>
 
 - **REQ-VC-vm-cli-024** The `application` block of the `identity` and `getStatus` responses carries `contentHash` and `layoutHash`: the `content_hash` and `layout_hash` of the header of the normal (committed) artifact the host holds, as 64 lowercase hexadecimal digits, read from the header and not recomputed. They follow the normal artifact through an assemble and stay those of the normal artifact while a candidate runs under Test. The fields are absent when the header carries the all-zero (no hash) value. The generation counters restart when the process restarts; the hashes do not.
 
+- **REQ-VC-vm-cli-054** The `getStatus` response and the `application` block of the `identity` response carry the optional field `edit`, the edit view of the host (ADR-0087): `stage` (`idle`, `accepted`, `testing`, `testingMigration` or `swapPending`), `commands` (for each of `accept`, `test`, `untest`, `assemble`, `cancel` and `finalizeAll`: `enabled`, `label` and, when not enabled, `reason` with the V-code and its text) and, except while a swap is pending, `next`. A command is enabled exactly when the host accepts it in its present state, and the reason is the refusal the host would give. The field is built from the host's transition table and nothing else.
+
 #### The device settings
 
 `serve` keeps the settings that belong to the device, not to the application it runs, in the file `<FILE>.device.json`, next to the slot store's files. The file is versioned JSON; each setting is one key:

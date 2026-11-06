@@ -161,7 +161,11 @@ fn edit_view_when_status_payload_is_built_then_it_carries_the_view_of_the_status
         let status = host_in(state).status();
         let payload = ironplc_runtime::StatusPayload::from(status.clone());
 
-        assert_eq!(payload.edit, Some(edit_view(&status)), "{state:?}");
+        assert_eq!(
+            payload.edit,
+            Some(Box::new(edit_view(&status))),
+            "{state:?}"
+        );
     }
 }
 

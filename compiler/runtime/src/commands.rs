@@ -222,9 +222,10 @@ pub struct StatusPayload {
     /// Which edit commands the host allows now, and why not for the others
     /// (ADR-0087). Built from the host's own transition table, so the allowed
     /// set is the set the host accepts. Absent on the wire from a device that
-    /// predates the field.
+    /// predates the field. Boxed: the view is larger than the rest of the
+    /// payload, and `Response` holds a payload by value.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub edit: Option<EditView>,
+    pub edit: Option<Box<EditView>>,
 }
 
 /// The wire form of a header hash: lowercase hexadecimal, or `None` for the
@@ -247,7 +248,7 @@ impl From<HostStatus> for StatusPayload {
             pending_edit: status.pending_edit,
             content_hash: wire_hash(&status.content_hash),
             layout_hash: wire_hash(&status.layout_hash),
-            edit: Some(edit),
+            edit: Some(Box::new(edit)),
         }
     }
 }

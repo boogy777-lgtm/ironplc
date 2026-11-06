@@ -10,13 +10,6 @@
 //! Not in the table: `permit_execution`, `revoke_execution_permit` and device
 //! settings are allowed in every state and are not edit commands.
 
-// Test-target boundary: the workspace denies panicking constructs in
-// production code; tests assert by panicking, so they are exempt here.
-#![expect(
-    clippy::unwrap_used,
-    reason = "integration test target: panicking helpers are sanctioned in tests"
-)]
-
 mod common;
 
 use common::edit_states::{body_candidate, host_in, State, STATES};

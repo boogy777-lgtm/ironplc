@@ -496,7 +496,7 @@ fn get_status_when_fresh_host_then_normal_generation_one_and_no_candidate() {
             pending_edit: None,
             content_hash: Some(content_hash),
             layout_hash: Some(layout_hash),
-            edit: Some(edit_view(&host.status())),
+            edit: Some(Box::new(edit_view(&host.status()))),
         })
     );
 }
@@ -654,7 +654,7 @@ fn identity_when_fresh_host_then_device_panel_and_live_status_snapshot() {
                 pending_edit: None,
                 content_hash: Some(content_hash),
                 layout_hash: Some(layout_hash),
-                edit: Some(edit_view(&host.status())),
+                edit: Some(Box::new(edit_view(&host.status()))),
             },
             redundancy: None,
             persisted_content_hash: None,

@@ -249,6 +249,20 @@ Field set:
   a device that predates them omits them, and a client that does not know
   them ignores them, so adding them keeps the protocol version. The client
   compares `contentHash` with its download record (below).
+  A third optional field, `edit`, is the edit view (ADR-0087): which edit
+  commands the host allows now, and why not for the others. It has `stage`
+  (`idle`, `accepted`, `testing`, `testingMigration`, or `swapPending` while a
+  test or an untest waits for the next scan boundary), `commands` and `next`.
+  `commands` has one entry for each of `accept`, `test`, `untest`, `assemble`
+  and `cancel`, and for `finalizeAll`, a composite whose `steps` (`accept`,
+  `test`, `assemble`) the client runs in order and which is enabled when its
+  first step is. Each entry has `enabled`, a `label` and, when it is not
+  enabled, a `reason` with the V-code and its text. `next` is the command that
+  moves the edit one stage on, with its `label`; it is absent while a swap is
+  pending. The view is built from the host's own transition table, so a client
+  offers exactly what the host accepts and computes no enablement itself;
+  the field is absent from a device that predates it, and adding it keeps the
+  protocol version (REQ-VC-vm-cli-054).
 - `persistedContentHash` and `retained` — optional, next to `application`:
   what the device keeps beside the application (REQ-VC-vm-cli-040).
   `persistedContentHash` is the `contentHash` of the application the device
